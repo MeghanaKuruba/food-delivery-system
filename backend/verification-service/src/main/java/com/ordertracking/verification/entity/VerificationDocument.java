@@ -1,5 +1,6 @@
 package com.ordertracking.verification.entity;
 
+import com.ordertracking.verification.enums.DocumentScope;
 import com.ordertracking.verification.enums.DocumentStatus;
 import com.ordertracking.verification.enums.DocumentType;
 import jakarta.persistence.*;
@@ -67,6 +68,10 @@ public class VerificationDocument {
 
     @Column(length = 500)
     private String rejectionReason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private DocumentScope documentScope;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime uploadedAt;

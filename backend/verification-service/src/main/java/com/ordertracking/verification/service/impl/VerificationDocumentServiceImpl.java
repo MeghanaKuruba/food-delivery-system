@@ -4,6 +4,8 @@ import com.ordertracking.verification.dto.SubmitVerificationDocumentRequest;
 import com.ordertracking.verification.dto.VerificationDocumentResponse;
 import com.ordertracking.verification.entity.VerificationApplication;
 import com.ordertracking.verification.entity.VerificationDocument;
+import com.ordertracking.verification.enums.DocumentStatus;
+import com.ordertracking.verification.exception.DuplicateVerificationDocumentException;
 import com.ordertracking.verification.exception.VerificationApplicationNotFoundException;
 import com.ordertracking.verification.exception.VerificationDocumentNotFoundException;
 import com.ordertracking.verification.mapper.VerificationMapper;
@@ -30,40 +32,39 @@ public class VerificationDocumentServiceImpl
     private final VerificationMapper verificationMapper;
 
     @Override
-    @Transactional
-    public VerificationDocumentResponse submitDocument(Long applicationId,
+    public VerificationDocumentResponse submitDocument(
+            Long applicationId,
             SubmitVerificationDocumentRequest request) {
 
         log.info(
-                "Submitting verification document. applicationId={}, documentType={}",
+                "Submitting verification document. applicationId={}, documentType={}, scope={}",
                 applicationId,
-                request.getDocumentType()
+                request.getDocumentType(),
+                request.getDocumentScope()
         );
 
         VerificationApplication application =
                 applicationRepository.findById(applicationId)
-                        .orElseThrow(() -> {
+                        .orElseThrow(() ->
+                                new VerificationApplicationNotFoundException(
+                                        "Verification application not found."
+                                )
+                        );
 
-                            log.warn(
-                                    "Verification application not found. applicationId={}",
-                                    applicationId
-                            );
-
-                            return new VerificationApplicationNotFoundException(
-                                    "Verification application not found."
-                            );
-                        });
+        validateDuplicateDocument(request);
 
         VerificationDocument document =
                 verificationMapper.toVerificationDocument(request, application);
+        document.setDocumentScope(request.getDocumentScope());
+        document.setStatus(DocumentStatus.UNDER_REVIEW);
 
         VerificationDocument saved =
                 documentRepository.save(document);
 
         log.info(
-                "Verification document submitted. documentId={}, applicationId={}, documentType={}",
-                saved.getDocumentId(),
+                "Verification document submitted successfully. applicationId={}, documentId={}, documentType={}",
                 applicationId,
+                saved.getDocumentId(),
                 saved.getDocumentType()
         );
 
@@ -133,5 +134,37 @@ public class VerificationDocumentServiceImpl
                 .stream()
                 .map(verificationMapper::toVerificationDocumentResponse)
                 .toList();
+    }
+
+    private void validateDuplicateDocument(
+            SubmitVerificationDocumentRequest request) {
+
+        boolean exists =
+                documentRepository.existsByDocumentNumberIgnoreCase(
+                                request.getDocumentNumber());
+
+        if (exists) {
+            log.warn(
+                    "Duplicate verification document submission attempted. documentType={}, documentNumber={}",
+                    request.getDocumentType(),
+                    maskDocumentNumber(request.getDocumentNumber())
+            );
+
+            throw new DuplicateVerificationDocumentException(
+                    "This document has already been submitted."
+            );
+        }
+    }
+
+    private String maskDocumentNumber(String documentNumber) {
+
+        if (documentNumber == null || documentNumber.length() <= 4) {
+            return "****";
+        }
+
+        return "****" +
+                documentNumber.substring(
+                        documentNumber.length() - 4
+                );
     }
 }
