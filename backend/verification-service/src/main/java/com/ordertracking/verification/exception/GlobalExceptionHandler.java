@@ -38,6 +38,13 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, "Verification Application Not Found", ex.getMessage(), request);
     }
 
+    @ExceptionHandler(DuplicateVerificationDocumentException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateVerificationDocumentException(
+            DuplicateVerificationDocumentException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, "Duplicate Verification Document", ex.getMessage(), request);
+    }
+
+
     @ExceptionHandler(VerificationDocumentNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleVerificationDocumentNotFoundException(
             VerificationDocumentNotFoundException ex, HttpServletRequest request) {
