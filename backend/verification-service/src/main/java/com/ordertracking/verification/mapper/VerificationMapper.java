@@ -100,9 +100,9 @@ public class VerificationMapper {
 
             case VEHICLE_INSURANCE -> "INS";
 
-            case GST_CERTIFICATE -> "GST";
+            case GST -> "GST";
 
-            case FSSAI_LICENSE -> "FSSAI";
+            case FSSAI -> "FSSAI";
 
             case BUSINESS_REGISTRATION -> "BR";
 

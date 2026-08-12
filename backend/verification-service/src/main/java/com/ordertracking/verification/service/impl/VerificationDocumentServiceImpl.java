@@ -1,6 +1,7 @@
 package com.ordertracking.verification.service.impl;
 
 import com.ordertracking.verification.dto.SubmitVerificationDocumentRequest;
+import com.ordertracking.verification.dto.UpdateVerificationDocumentRequest;
 import com.ordertracking.verification.dto.VerificationDocumentResponse;
 import com.ordertracking.verification.entity.VerificationApplication;
 import com.ordertracking.verification.entity.VerificationDocument;
@@ -22,8 +23,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class VerificationDocumentServiceImpl
-        implements VerificationDocumentService {
+@Transactional
+public class VerificationDocumentServiceImpl implements VerificationDocumentService {
 
     private final VerificationApplicationRepository applicationRepository;
 
@@ -45,13 +46,35 @@ public class VerificationDocumentServiceImpl
 
         VerificationApplication application =
                 applicationRepository.findById(applicationId)
-                        .orElseThrow(() ->
-                                new VerificationApplicationNotFoundException(
-                                        "Verification application not found."
-                                )
-                        );
+                        .orElseThrow(() -> {
 
-        validateDuplicateDocument(request);
+                            log.warn(
+                                    "Verification application not found. applicationId={}",
+                                    applicationId
+                            );
+
+                            return new VerificationApplicationNotFoundException(
+                                    "Verification application not found."
+                            );
+                        });
+
+        /*
+         * One document of each type is allowed
+         * within one verification application.
+         *
+         * Example:
+         *
+         * Application 1
+         * PAN  -> allowed
+         * PAN  -> rejected
+         * GST  -> allowed
+         */
+        validateDocumentTypeNotAlreadySubmitted(applicationId, request.getDocumentType());
+
+        /*
+         * Document number should also not already exist.
+         */
+        validateDuplicateDocumentNumber(request.getDocumentNumber());
 
         VerificationDocument document =
                 verificationMapper.toVerificationDocument(request, application);
@@ -136,18 +159,170 @@ public class VerificationDocumentServiceImpl
                 .toList();
     }
 
-    private void validateDuplicateDocument(
-            SubmitVerificationDocumentRequest request) {
+    @Override
+    public VerificationDocumentResponse updateDocument(
+            String documentId,
+            UpdateVerificationDocumentRequest request) {
+
+        log.info(
+                "Updating verification document. documentId={}, documentType={}",
+                documentId,
+                request.getDocumentType()
+        );
+
+
+        VerificationDocument document =
+                documentRepository.findById(documentId)
+                        .orElseThrow(() -> {
+
+                            log.warn(
+                                    "Verification document not found for update. documentId={}",
+                                    documentId
+                            );
+
+                            return new VerificationDocumentNotFoundException(
+                                    "Verification document not found."
+                            );
+                        });
+        /*
+         * PAN cannot be changed to GST during update.
+         *
+         * PAN -> PAN    allowed
+         * PAN -> GST    rejected
+         */
+        if (document.getDocumentType()
+                != request.getDocumentType()) {
+
+            log.warn(
+                    "Document type change rejected. documentId={}, existingType={}, requestedType={}",
+                    documentId,
+                    document.getDocumentType(),
+                    request.getDocumentType()
+            );
+
+            throw new IllegalArgumentException(
+                    "Document type cannot be changed during document update."
+            );
+        }
+
+        /*
+         * If the user is replacing the document with another
+         * document number, check whether that number is already
+         * being used elsewhere.
+         */
+        boolean documentNumberChanged =
+                !document.getDocumentNumber()
+                        .equalsIgnoreCase(
+                                request.getDocumentNumber()
+                        );
+
+
+        if (documentNumberChanged &&
+                documentRepository.existsByDocumentNumberIgnoreCase(
+                        request.getDocumentNumber()
+                )) {
+
+            log.warn(
+                    "Document update rejected because document number already exists. documentId={}, documentType={}",
+                    documentId,
+                    request.getDocumentType()
+            );
+
+            throw new DuplicateVerificationDocumentException(
+                    "This document number has already been submitted."
+            );
+        }
+        document.setDocumentNumber(
+                request.getDocumentNumber()
+        );
+
+        document.setDocumentUrl(
+                request.getDocumentUrl()
+        );
+
+        document.setIssuedAt(
+                request.getIssuedAt()
+        );
+
+        document.setExpiryDate(
+                request.getExpiryDate()
+        );
+
+
+        /*
+         * Any updated/re-uploaded document must be verified again.
+         */
+        document.setStatus(
+                DocumentStatus.UNDER_REVIEW
+        );
+
+        document.setRejectionReason(null);
+
+        document.setVerifiedAt(null);
+
+        VerificationDocument saved =
+                documentRepository.save(document);
+
+
+        log.info(
+                "Verification document updated successfully. documentId={}, documentType={}, status={}",
+                saved.getDocumentId(),
+                saved.getDocumentType(),
+                saved.getStatus()
+        );
+
+
+        return verificationMapper.toVerificationDocumentResponse(
+                saved
+        );
+    }
+
+    private void validateDocumentTypeNotAlreadySubmitted(
+            Long applicationId,
+            com.ordertracking.verification.enums.DocumentType documentType) {
 
         boolean exists =
-                documentRepository.existsByDocumentNumberIgnoreCase(
-                                request.getDocumentNumber());
+                documentRepository
+                        .existsByVerificationApplicationIdAndDocumentType(
+                                applicationId,
+                                documentType
+                        );
+
 
         if (exists) {
+
+            log.warn(
+                    "Duplicate document type submission rejected. applicationId={}, documentType={}",
+                    applicationId,
+                    documentType
+            );
+
+            throw new DuplicateVerificationDocumentException(
+                    "A " + documentType +
+                            " document has already been submitted " +
+                            "for this verification application. " +
+                            "Use the update document operation to replace it."
+            );
+        }
+    }
+
+
+    private void validateDuplicateDocumentNumber(
+            String documentNumber) {
+
+        boolean exists =
+                documentRepository
+                        .existsByDocumentNumberIgnoreCase(
+                                documentNumber
+                        );
+
+
+        if (exists) {
+
             log.warn(
                     "Duplicate verification document submission attempted. documentType={}, documentNumber={}",
-                    request.getDocumentType(),
-                    maskDocumentNumber(request.getDocumentNumber())
+                    "REDACTED",
+                    maskDocumentNumber(documentNumber)
             );
 
             throw new DuplicateVerificationDocumentException(
