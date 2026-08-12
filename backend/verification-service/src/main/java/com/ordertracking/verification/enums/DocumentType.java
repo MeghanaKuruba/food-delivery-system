@@ -10,9 +10,9 @@ public enum DocumentType {
 
     VEHICLE_INSURANCE,
 
-    GST_CERTIFICATE,
+    GST,
 
-    FSSAI_LICENSE,
+    FSSAI,
 
     BUSINESS_REGISTRATION,
 

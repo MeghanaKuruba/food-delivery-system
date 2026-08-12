@@ -1,9 +1,6 @@
 package com.ordertracking.verification.controller;
 
-import com.ordertracking.verification.dto.CreateVerificationApplicationRequest;
-import com.ordertracking.verification.dto.SubmitVerificationDocumentRequest;
-import com.ordertracking.verification.dto.VerificationApplicationResponse;
-import com.ordertracking.verification.dto.VerificationDocumentResponse;
+import com.ordertracking.verification.dto.*;
 import com.ordertracking.verification.service.VerificationDocumentService;
 import com.ordertracking.verification.service.VerificationService;
 import jakarta.validation.Valid;
@@ -73,5 +70,13 @@ public class VerificationController {
             @PathVariable Long applicationId) {
 
         return ResponseEntity.ok(verificationDocumentService.getDocuments(applicationId));
+    }
+
+    @PutMapping("/documents/{documentId}")
+    public ResponseEntity<VerificationDocumentResponse> updateDocument(
+            @PathVariable String documentId,
+            @Valid @RequestBody UpdateVerificationDocumentRequest request) {
+
+        return ResponseEntity.ok(verificationDocumentService.updateDocument(documentId, request));
     }
 }
