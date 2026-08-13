@@ -5,6 +5,7 @@ import com.ordertracking.verification.enums.DocumentType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 
@@ -21,13 +22,13 @@ public class SubmitVerificationDocumentRequest {
     @NotBlank(message = "Document number is required")
     private String documentNumber;
 
-    @NotBlank(message = "Document URL is required")
-    private String documentUrl;
-
     @NotNull
     private DocumentScope documentScope;
 
     private LocalDate issuedAt;
 
     private LocalDate expiryDate;
+
+    @NotNull
+    private MultipartFile document;
 }

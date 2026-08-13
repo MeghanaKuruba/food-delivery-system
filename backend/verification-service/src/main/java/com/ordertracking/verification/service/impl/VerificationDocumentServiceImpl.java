@@ -13,6 +13,8 @@ import com.ordertracking.verification.mapper.VerificationMapper;
 import com.ordertracking.verification.repository.VerificationApplicationRepository;
 import com.ordertracking.verification.repository.VerificationDocumentRepository;
 import com.ordertracking.verification.service.VerificationDocumentService;
+import com.ordertracking.verification.service.storage.DocumentFileValidationService;
+import com.ordertracking.verification.service.storage.DocumentStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,10 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
     private final VerificationDocumentRepository documentRepository;
 
     private final VerificationMapper verificationMapper;
+
+    private final DocumentStorageService documentStorageService;
+
+    private final DocumentFileValidationService documentFileValidationService;
 
     @Override
     public VerificationDocumentResponse submitDocument(
@@ -58,40 +64,84 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                             );
                         });
 
-        /*
-         * One document of each type is allowed
-         * within one verification application.
-         *
-         * Example:
-         *
-         * Application 1
-         * PAN  -> allowed
-         * PAN  -> rejected
-         * GST  -> allowed
-         */
-        validateDocumentTypeNotAlreadySubmitted(applicationId, request.getDocumentType());
-
-        /*
-         * Document number should also not already exist.
-         */
-        validateDuplicateDocumentNumber(request.getDocumentNumber());
-
-        VerificationDocument document =
-                verificationMapper.toVerificationDocument(request, application);
-        document.setDocumentScope(request.getDocumentScope());
-        document.setStatus(DocumentStatus.UNDER_REVIEW);
-
-        VerificationDocument saved =
-                documentRepository.save(document);
-
-        log.info(
-                "Verification document submitted successfully. applicationId={}, documentId={}, documentType={}",
+        validateDocumentTypeNotAlreadySubmitted(
                 applicationId,
-                saved.getDocumentId(),
-                saved.getDocumentType()
+                request.getDocumentType()
         );
 
-        return verificationMapper.toVerificationDocumentResponse(saved);
+        validateDuplicateDocumentNumber(
+                request.getDocumentNumber()
+        );
+
+        documentFileValidationService.validate(
+                request.getDocument()
+        );
+
+        VerificationDocument document =
+                verificationMapper.toVerificationDocument(
+                        request,
+                        application
+                );
+
+        document.setDocumentScope(
+                request.getDocumentScope()
+        );
+
+        document.setStatus(
+                DocumentStatus.UNDER_REVIEW
+        );
+
+        String documentId =
+                document.getDocumentId();
+
+        String storageReference = null;
+
+        try {
+
+            storageReference =
+                    documentStorageService.store(
+                            request.getDocument(),
+                            documentId,
+                            request.getDocumentType().name()
+                    );
+
+            document.setDocumentUrl(
+                    storageReference
+            );
+
+            VerificationDocument saved =
+                    documentRepository.save(document);
+
+            log.info(
+                    "Verification document submitted successfully. applicationId={}, documentId={}, documentType={}",
+                    applicationId,
+                    saved.getDocumentId(),
+                    saved.getDocumentType()
+            );
+
+            return verificationMapper.toVerificationDocumentResponse(
+                    saved
+            );
+
+        } catch (RuntimeException exception) {
+
+            log.error(
+                    "Verification document submission failed. applicationId={}, documentId={}, documentType={}",
+                    applicationId,
+                    documentId,
+                    request.getDocumentType(),
+                    exception
+            );
+
+            if (storageReference != null) {
+
+                documentStorageService.delete(
+                        storageReference
+                );
+            }
+
+            throw exception;
+        }
     }
 
     @Override

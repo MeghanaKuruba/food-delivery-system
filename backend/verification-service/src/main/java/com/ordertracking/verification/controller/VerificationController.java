@@ -6,6 +6,7 @@ import com.ordertracking.verification.service.VerificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -43,10 +44,13 @@ public class VerificationController {
         return ResponseEntity.ok(verificationService.getApplicationsByUser(authUserId));
     }
 
-    @PostMapping("/{applicationId}/documents")
+    @PostMapping(
+            value = "/{applicationId}/documents",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
     public ResponseEntity<VerificationDocumentResponse> submitDocument(
             @PathVariable Long applicationId,
-            @Valid @RequestBody SubmitVerificationDocumentRequest request) {
+            @Valid @ModelAttribute SubmitVerificationDocumentRequest request) {
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)

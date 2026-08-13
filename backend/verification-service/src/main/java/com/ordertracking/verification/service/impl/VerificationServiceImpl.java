@@ -24,8 +24,7 @@ public class VerificationServiceImpl
     private final VerificationMapper verificationMapper;
 
     @Override
-    public VerificationApplicationResponse createApplication(
-            CreateVerificationApplicationRequest request) {
+    public VerificationApplicationResponse createApplication(CreateVerificationApplicationRequest request) {
 
         log.info(
                 "Creating verification application. authUserId={}, applicantType={}",
@@ -54,8 +53,7 @@ public class VerificationServiceImpl
     }
 
     @Override
-    public VerificationApplicationResponse getApplication(
-            Long applicationId) {
+    public VerificationApplicationResponse getApplication(Long applicationId) {
 
         log.debug(
                 "Fetching verification application. applicationId={}",
@@ -79,8 +77,7 @@ public class VerificationServiceImpl
     }
 
     @Override
-    public List<VerificationApplicationResponse>
-    getApplicationsByUser(Long authUserId) {
+    public List<VerificationApplicationResponse> getApplicationsByUser(Long authUserId) {
 
         log.debug(
                 "Fetching verification applications. authUserId={}",
