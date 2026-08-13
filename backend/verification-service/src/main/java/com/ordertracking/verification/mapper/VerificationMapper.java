@@ -5,6 +5,7 @@ import com.ordertracking.verification.dto.VerificationApplicationResponse;
 import com.ordertracking.verification.dto.VerificationDocumentResponse;
 import com.ordertracking.verification.entity.VerificationApplication;
 import com.ordertracking.verification.entity.VerificationDocument;
+import com.ordertracking.verification.enums.DocumentStatus;
 import com.ordertracking.verification.enums.DocumentType;
 import org.springframework.stereotype.Component;
 
@@ -53,14 +54,20 @@ public class VerificationMapper {
             SubmitVerificationDocumentRequest request,
             VerificationApplication application) {
 
+        String documentId =
+                generateDocumentId(
+                        request.getDocumentType()
+                );
+
         return VerificationDocument.builder()
-                .documentId(generateDocumentId(request.getDocumentType()))
+                .documentId(documentId)
                 .verificationApplication(application)
                 .documentType(request.getDocumentType())
                 .documentNumber(request.getDocumentNumber())
-                .documentUrl(request.getDocumentUrl())
                 .issuedAt(request.getIssuedAt())
                 .expiryDate(request.getExpiryDate())
+                .status(DocumentStatus.UPLOADED)
+                .documentScope(request.getDocumentScope())
                 .build();
     }
 
@@ -80,7 +87,7 @@ public class VerificationMapper {
                 UUID.randomUUID()
                         .toString()
                         .replace("-", "")
-                        .substring(0, 6)
+                        .substring(0, 8)
                         .toUpperCase();
 
         return getDocumentPrefix(documentType)
