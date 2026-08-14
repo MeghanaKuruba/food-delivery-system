@@ -69,13 +69,9 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                 request.getDocumentType()
         );
 
-        validateDuplicateDocumentNumber(
-                request.getDocumentNumber()
-        );
+        validateDuplicateDocumentNumber(request.getDocumentNumber());
 
-        documentFileValidationService.validate(
-                request.getDocument()
-        );
+        documentFileValidationService.validateAndDetectType(request.getDocument());
 
         VerificationDocument document =
                 verificationMapper.toVerificationDocument(
@@ -83,34 +79,25 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                         application
                 );
 
-        document.setDocumentScope(
-                request.getDocumentScope()
-        );
+        document.setDocumentScope(request.getDocumentScope());
 
-        document.setStatus(
-                DocumentStatus.UNDER_REVIEW
-        );
+        document.setStatus(DocumentStatus.UNDER_REVIEW);
 
-        String documentId =
-                document.getDocumentId();
+        String documentId = document.getDocumentId();
 
         String storageReference = null;
 
         try {
 
-            storageReference =
-                    documentStorageService.store(
+            storageReference = documentStorageService.store(
                             request.getDocument(),
                             documentId,
                             request.getDocumentType().name()
                     );
 
-            document.setDocumentUrl(
-                    storageReference
-            );
+            document.setDocumentUrl(storageReference);
 
-            VerificationDocument saved =
-                    documentRepository.save(document);
+            VerificationDocument saved = documentRepository.save(document);
 
             log.info(
                     "Verification document submitted successfully. applicationId={}, documentId={}, documentType={}",
@@ -119,9 +106,7 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                     saved.getDocumentType()
             );
 
-            return verificationMapper.toVerificationDocumentResponse(
-                    saved
-            );
+            return verificationMapper.toVerificationDocumentResponse(saved);
 
         } catch (RuntimeException exception) {
 
@@ -135,9 +120,7 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
 
             if (storageReference != null) {
 
-                documentStorageService.delete(
-                        storageReference
-                );
+                documentStorageService.delete(storageReference);
             }
 
             throw exception;
