@@ -33,15 +33,27 @@ public class DocumentFileValidationService {
 
         if (file == null || file.isEmpty()) {
 
-            throw new IllegalArgumentException("Document file is required.");
+            log.warn("Verification document upload rejected because file is empty.");
+
+            throw new IllegalArgumentException(
+                    "Document file is required."
+            );
         }
 
         if (file.getSize() > maxFileSize.toBytes()) {
 
-            throw new IllegalArgumentException("Document file size must not exceed 5 MB.");
+            log.warn(
+                    "Verification document upload rejected because file exceeds maximum size. size={}",
+                    file.getSize()
+            );
+
+            throw new IllegalArgumentException(
+                    "Document file size must not exceed 5 MB."
+            );
         }
 
-        String declaredContentType = normalizeContentType(file.getContentType());
+        String declaredContentType =
+                normalizeContentType(file.getContentType());
 
         log.debug(
                 "Validating verification document. declaredContentType={}, size={}, originalFilename={}",
@@ -50,17 +62,8 @@ public class DocumentFileValidationService {
                 file.getOriginalFilename()
         );
 
-        if (!isSupportedDeclaredContentType(declaredContentType)) {
-
-            log.warn(
-                    "Unsupported verification document content type. contentType={}",
-                    declaredContentType
-            );
-
-            throw new IllegalArgumentException("Only PDF, PNG and JPEG documents are supported.");
-        }
-
-        String actualContentType = detectActualContentType(file);
+        String actualContentType =
+                detectActualContentType(file);
 
         log.debug(
                 "Detected actual verification document content type. declaredContentType={}, actualContentType={}",
@@ -68,11 +71,15 @@ public class DocumentFileValidationService {
                 actualContentType
         );
 
-        validateContentTypeMatch(declaredContentType, actualContentType);
+        validateActualContentType(actualContentType);
 
-        log.debug(
-                "Verification document file validation successful. declaredContentType={}, actualContentType={}, size={}",
+        validateDeclaredContentType(
                 declaredContentType,
+                actualContentType
+        );
+
+        log.info(
+                "Verification document file validation successful. actualContentType={}, size={}",
                 actualContentType,
                 file.getSize()
         );
@@ -91,38 +98,98 @@ public class DocumentFileValidationService {
                 .toLowerCase();
     }
 
-    private boolean isSupportedDeclaredContentType(String contentType) {
-
-        return contentType != null &&
-                (
-                        ALLOWED_CONTENT_TYPES.contains(contentType) ||
-                                GENERIC_CONTENT_TYPE.equals(contentType)
-                );
-    }
-
     private String detectActualContentType(MultipartFile file) {
 
-        try (InputStream inputStream =
-                     file.getInputStream()) {
+        try (InputStream inputStream = file.getInputStream()) {
 
             String detectedContentType =
-                    tika.detect(
-                            inputStream,
-                            file.getOriginalFilename()
-                    );
+                    tika.detect(inputStream);
 
-            if (GENERIC_CONTENT_TYPE.equals(detectedContentType)) {
+            if (GENERIC_CONTENT_TYPE.equals(
+                    detectedContentType)) {
 
                 return null;
             }
 
-            return normalizeDetectedContentType(detectedContentType);
+            return normalizeDetectedContentType(
+                    detectedContentType
+            );
 
         } catch (IOException exception) {
 
-            log.error("Unable to read verification document file for content validation.", exception);
+            log.error(
+                    "Unable to read verification document file for content validation.",
+                    exception
+            );
 
-            throw new IllegalArgumentException("Unable to validate document file.", exception);
+            throw new IllegalArgumentException(
+                    "Unable to validate document file.",
+                    exception
+            );
+        }
+    }
+
+    private void validateActualContentType(
+            String actualContentType) {
+
+        if (actualContentType == null ||
+                !ALLOWED_CONTENT_TYPES.contains(actualContentType)) {
+
+            log.warn(
+                    "Unsupported verification document content detected. actualContentType={}",
+                    actualContentType
+            );
+
+            throw new IllegalArgumentException(
+                    "The uploaded file is not a valid PDF, PNG or JPEG document."
+            );
+        }
+    }
+
+    private void validateDeclaredContentType(
+            String declaredContentType,
+            String actualContentType) {
+
+        if (declaredContentType == null ||
+                GENERIC_CONTENT_TYPE.equals(declaredContentType)) {
+
+            /*
+             * The client did not provide a reliable MIME type.
+             * Apache Tika has already validated the actual content.
+             */
+            return;
+        }
+
+        if (isJpeg(declaredContentType) &&
+                "image/jpeg".equals(actualContentType)) {
+
+            return;
+        }
+
+        if (!ALLOWED_CONTENT_TYPES.contains(declaredContentType)) {
+
+            log.warn(
+                    "Unsupported declared MIME type. declaredContentType={}, actualContentType={}",
+                    declaredContentType,
+                    actualContentType
+            );
+
+            throw new IllegalArgumentException(
+                    "Unsupported document MIME type."
+            );
+        }
+
+        if (!declaredContentType.equals(actualContentType)) {
+
+            log.warn(
+                    "Verification document MIME type does not match actual file content. declaredContentType={}, actualContentType={}",
+                    declaredContentType,
+                    actualContentType
+            );
+
+            throw new IllegalArgumentException(
+                    "The uploaded file type does not match its actual content."
+            );
         }
     }
 
