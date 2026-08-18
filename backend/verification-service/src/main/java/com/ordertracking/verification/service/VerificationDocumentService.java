@@ -3,6 +3,7 @@ package com.ordertracking.verification.service;
 import com.ordertracking.verification.dto.SubmitVerificationDocumentRequest;
 import com.ordertracking.verification.dto.UpdateVerificationDocumentRequest;
 import com.ordertracking.verification.dto.VerificationDocumentResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -14,5 +15,5 @@ public interface VerificationDocumentService {
 
     List<VerificationDocumentResponse> getDocuments(Long applicationId);
 
-    VerificationDocumentResponse updateDocument(String documentId, UpdateVerificationDocumentRequest request);
+    VerificationDocumentResponse updateDocument(String documentId, UpdateVerificationDocumentRequest request, MultipartFile document);
 }

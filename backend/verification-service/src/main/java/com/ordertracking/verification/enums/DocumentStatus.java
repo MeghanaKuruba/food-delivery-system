@@ -14,5 +14,7 @@ public enum DocumentStatus {
 
     MISMATCH,
 
+    REJECTED,
+
     REUPLOAD_REQUIRED
 }

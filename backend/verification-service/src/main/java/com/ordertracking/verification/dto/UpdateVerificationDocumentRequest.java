@@ -1,9 +1,11 @@
 package com.ordertracking.verification.dto;
 
+import com.ordertracking.verification.enums.DocumentScope;
 import com.ordertracking.verification.enums.DocumentType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 
@@ -14,14 +16,11 @@ import java.time.LocalDate;
 @Builder
 public class UpdateVerificationDocumentRequest {
 
-    @NotNull
-    private DocumentType documentType;
-
     @NotBlank
     private String documentNumber;
 
-    @NotBlank
-    private String documentUrl;
+    @NotNull
+    private DocumentScope documentScope;
 
     private LocalDate issuedAt;
 

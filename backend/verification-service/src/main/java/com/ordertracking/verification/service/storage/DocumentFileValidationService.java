@@ -29,6 +29,13 @@ public class DocumentFileValidationService {
 
     private final Tika tika = new Tika();
 
+    /**
+     * Validates the uploaded document file and detects its actual content type.
+     *
+     * @param file The uploaded document file.
+     * @return The detected actual content type of the file.
+     * @throws IllegalArgumentException If the file is invalid or does not meet the requirements.
+     */
     public String validateAndDetectType(MultipartFile file) {
 
         if (file == null || file.isEmpty()) {
@@ -87,6 +94,12 @@ public class DocumentFileValidationService {
         return actualContentType;
     }
 
+    /**
+     * Normalizes the content type string by trimming whitespace and converting to lowercase.
+     *
+     * @param contentType The content type string to normalize.
+     * @return The normalized content type string, or null if the input is null.
+     */
     private String normalizeContentType(String contentType) {
 
         if (contentType == null) {
@@ -98,6 +111,13 @@ public class DocumentFileValidationService {
                 .toLowerCase();
     }
 
+    /**
+     * Detects the actual content type of the uploaded file using Apache Tika.
+     *
+     * @param file The uploaded document file.
+     * @return The detected actual content type, or null if it cannot be determined.
+     * @throws IllegalArgumentException If there is an error reading the file.
+     */
     private String detectActualContentType(MultipartFile file) {
 
         try (InputStream inputStream = file.getInputStream()) {
@@ -129,8 +149,13 @@ public class DocumentFileValidationService {
         }
     }
 
-    private void validateActualContentType(
-            String actualContentType) {
+    /**
+     * Validates the actual content type of the uploaded file against allowed types.
+     *
+     * @param actualContentType The detected actual content type of the file.
+     * @throws IllegalArgumentException If the actual content type is not allowed.
+     */
+    private void validateActualContentType(String actualContentType) {
 
         if (actualContentType == null ||
                 !ALLOWED_CONTENT_TYPES.contains(actualContentType)) {
@@ -146,9 +171,14 @@ public class DocumentFileValidationService {
         }
     }
 
-    private void validateDeclaredContentType(
-            String declaredContentType,
-            String actualContentType) {
+    /**
+     * Validates the declared content type against the actual content type of the uploaded file.
+     *
+     * @param declaredContentType The content type declared by the client.
+     * @param actualContentType   The detected actual content type of the file.
+     * @throws IllegalArgumentException If the declared content type is not allowed or does not match the actual content type.
+     */
+    private void validateDeclaredContentType(String declaredContentType, String actualContentType) {
 
         if (declaredContentType == null ||
                 GENERIC_CONTENT_TYPE.equals(declaredContentType)) {
@@ -193,8 +223,13 @@ public class DocumentFileValidationService {
         }
     }
 
-    private String normalizeDetectedContentType(
-            String contentType) {
+    /**
+     * Normalizes the detected content type string for specific cases.
+     *
+     * @param contentType The detected content type string.
+     * @return The normalized content type string.
+     */
+    private String normalizeDetectedContentType(String contentType) {
 
         if ("image/jpg".equals(contentType)) {
             return "image/jpeg";
@@ -203,56 +238,12 @@ public class DocumentFileValidationService {
         return contentType;
     }
 
-    private void validateContentTypeMatch(
-            String declaredContentType,
-            String actualContentType) {
-
-        if (actualContentType == null ||
-                !ALLOWED_CONTENT_TYPES.contains(
-                        actualContentType)) {
-
-            log.warn(
-                    "Unsupported or invalid verification document file content. declaredContentType={}, actualContentType={}",
-                    declaredContentType,
-                    actualContentType
-            );
-
-            throw new IllegalArgumentException("The uploaded file is not a valid PDF, PNG or JPEG document.");
-        }
-
-        /*
-         * application/octet-stream means the client did not
-         * provide a specific MIME type.
-         *
-         * In that case, rely on the actual file content
-         * detected by Apache Tika.
-         */
-        if (GENERIC_CONTENT_TYPE.equals(declaredContentType)) {
-
-            return;
-        }
-
-        /*
-         * image/jpg and image/jpeg represent the same
-         * actual JPEG file format.
-         */
-        if (isJpeg(declaredContentType) && "image/jpeg".equals(actualContentType)) {
-
-            return;
-        }
-
-        if (!declaredContentType.equals(actualContentType)) {
-
-            log.warn(
-                    "Verification document MIME type does not match actual file content. declaredContentType={}, actualContentType={}",
-                    declaredContentType,
-                    actualContentType
-            );
-
-            throw new IllegalArgumentException("The uploaded file type does not match its actual content.");
-        }
-    }
-
+    /**
+     * Checks if the given content type represents a JPEG image.
+     *
+     * @param contentType The content type to check.
+     * @return True if the content type is "image/jpeg" or "image/jpg", false otherwise.
+     */
     private boolean isJpeg(String contentType) {
 
         return "image/jpeg".equals(contentType) || "image/jpg".equals(contentType);
