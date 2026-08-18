@@ -16,4 +16,6 @@ public interface VerificationDocumentRepository extends JpaRepository<Verificati
     boolean existsByDocumentNumberIgnoreCase(String documentNumber);
 
     boolean existsByVerificationApplicationIdAndDocumentType(Long applicationId, DocumentType documentType);
+
+    boolean existsByDocumentNumberIgnoreCaseAndDocumentIdNot(String documentNumber, String documentId);
 }

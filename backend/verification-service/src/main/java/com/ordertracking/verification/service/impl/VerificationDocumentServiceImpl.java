@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -38,10 +39,17 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
 
     private final DocumentFileValidationService documentFileValidationService;
 
+    /**
+     * Submits a verification document for a specific application.
+     *
+     * @param applicationId The ID of the verification application.
+     * @param request       The request containing document details and the file.
+     * @return A response containing the submitted document's details.
+     * @throws VerificationApplicationNotFoundException If the application does not exist.
+     * @throws DuplicateVerificationDocumentException   If a document of the same type has already been submitted for this application or if the document number is already in use.
+     */
     @Override
-    public VerificationDocumentResponse submitDocument(
-            Long applicationId,
-            SubmitVerificationDocumentRequest request) {
+    public VerificationDocumentResponse submitDocument(Long applicationId, SubmitVerificationDocumentRequest request) {
 
         log.info(
                 "Submitting verification document. applicationId={}, documentType={}, scope={}",
@@ -64,10 +72,7 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                             );
                         });
 
-        validateDocumentTypeNotAlreadySubmitted(
-                applicationId,
-                request.getDocumentType()
-        );
+        validateDocumentTypeNotAlreadySubmitted(applicationId, request.getDocumentType());
 
         validateDuplicateDocumentNumber(request.getDocumentNumber());
 
@@ -127,15 +132,18 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
         }
     }
 
+    /**
+     * Retrieves a verification document by its ID.
+     *
+     * @param documentId The ID of the verification document.
+     * @return A response containing the document's details.
+     * @throws VerificationDocumentNotFoundException If the document does not exist.
+     */
     @Override
     @Transactional(readOnly = true)
-    public VerificationDocumentResponse getDocument(
-            String documentId) {
+    public VerificationDocumentResponse getDocument(String documentId) {
 
-        log.debug(
-                "Fetching verification document. documentId={}",
-                documentId
-        );
+        log.debug("Fetching verification document. documentId={}", documentId);
 
         VerificationDocument document =
                 documentRepository.findById(documentId)
@@ -154,10 +162,16 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
         return verificationMapper.toVerificationDocumentResponse(document);
     }
 
+    /**
+     * Retrieves all verification documents associated with a specific application.
+     *
+     * @param applicationId The ID of the verification application.
+     * @return A list of responses containing the documents' details.
+     * @throws VerificationApplicationNotFoundException If the application does not exist.
+     */
     @Override
     @Transactional(readOnly = true)
-    public List<VerificationDocumentResponse> getDocuments(
-            Long applicationId) {
+    public List<VerificationDocumentResponse> getDocuments(Long applicationId) {
 
         log.debug(
                 "Fetching verification documents. applicationId={}",
@@ -192,20 +206,21 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                 .toList();
     }
 
+    /**
+     * Updates an existing verification document.
+     *
+     * @param documentId The ID of the verification document to update.
+     * @param request    The request containing updated document details.
+     * @param document   The new document file to upload.
+     * @return A response containing the updated document's details.
+     * @throws VerificationDocumentNotFoundException If the document does not exist.
+     * @throws IllegalStateException                  If the document cannot be updated in its current status.
+     * @throws DuplicateVerificationDocumentException If a document with the same number already exists.
+     */
     @Override
-    public VerificationDocumentResponse updateDocument(
-            String documentId,
-            UpdateVerificationDocumentRequest request) {
+    public VerificationDocumentResponse updateDocument(String documentId, UpdateVerificationDocumentRequest request, MultipartFile document) {
 
-        log.info(
-                "Updating verification document. documentId={}, documentType={}",
-                documentId,
-                request.getDocumentType()
-        );
-
-
-        VerificationDocument document =
-                documentRepository.findById(documentId)
+        VerificationDocument existingDocument = documentRepository.findById(documentId)
                         .orElseThrow(() -> {
 
                             log.warn(
@@ -217,106 +232,164 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                                     "Verification document not found."
                             );
                         });
+
+        log.info(
+                "Updating verification document. documentId={}, documentType={}, scope={}",
+                documentId,
+                existingDocument.getDocumentType(),
+                request.getDocumentScope()
+        );
+
+        DocumentStatus currentStatus = existingDocument.getStatus();
+
         /*
-         * PAN cannot be changed to GST during update.
-         *
-         * PAN -> PAN    allowed
-         * PAN -> GST    rejected
+         * A document can only be re-uploaded when
+         * verification has explicitly requested it
+         * or the document has been rejected.
          */
-        if (document.getDocumentType()
-                != request.getDocumentType()) {
+        if (currentStatus != DocumentStatus.REUPLOAD_REQUIRED
+                && currentStatus != DocumentStatus.REJECTED) {
 
             log.warn(
-                    "Document type change rejected. documentId={}, existingType={}, requestedType={}",
+                    "Document update not allowed for current status. documentId={}, status={}",
                     documentId,
-                    document.getDocumentType(),
-                    request.getDocumentType()
+                    currentStatus
             );
 
-            throw new IllegalArgumentException(
-                    "Document type cannot be changed during document update."
+            throw new IllegalStateException(
+                    "Document cannot be updated in its current status."
             );
         }
 
         /*
-         * If the user is replacing the document with another
-         * document number, check whether that number is already
-         * being used elsewhere.
+         * Do not allow the same document number to be
+         * associated with another document record.
+         *
+         * The current document itself is excluded from
+         * the duplicate check.
          */
-        boolean documentNumberChanged =
-                !document.getDocumentNumber()
-                        .equalsIgnoreCase(
-                                request.getDocumentNumber()
-                        );
+        boolean duplicateExists = documentRepository.existsByDocumentNumberIgnoreCaseAndDocumentIdNot(request.getDocumentNumber(), documentId);
 
-
-        if (documentNumberChanged &&
-                documentRepository.existsByDocumentNumberIgnoreCase(
-                        request.getDocumentNumber()
-                )) {
+        if (duplicateExists) {
 
             log.warn(
-                    "Document update rejected because document number already exists. documentId={}, documentType={}",
+                    "Duplicate document number detected during update. documentId={}, documentType={}",
                     documentId,
-                    request.getDocumentType()
+                    existingDocument.getDocumentType()
             );
 
             throw new DuplicateVerificationDocumentException(
-                    "This document number has already been submitted."
+                    "This document has already been submitted."
             );
         }
-        document.setDocumentNumber(
-                request.getDocumentNumber()
-        );
-
-        document.setDocumentUrl(
-                request.getDocumentUrl()
-        );
-
-        document.setIssuedAt(
-                request.getIssuedAt()
-        );
-
-        document.setExpiryDate(
-                request.getExpiryDate()
-        );
-
 
         /*
-         * Any updated/re-uploaded document must be verified again.
+         * Validate the uploaded file using the same
+         * validation pipeline used during initial submission.
          */
-        document.setStatus(
-                DocumentStatus.UNDER_REVIEW
-        );
+        documentFileValidationService.validateAndDetectType(document);
 
-        document.setRejectionReason(null);
+        String oldStorageReference =
+                existingDocument.getDocumentUrl();
 
-        document.setVerifiedAt(null);
+        String newStorageReference = null;
 
-        VerificationDocument saved =
-                documentRepository.save(document);
+        try {
 
+            /*
+             * Store the new file first.
+             *
+             * We do this before changing the DB record so that
+             * the existing document remains usable if storage fails.
+             */
+            newStorageReference = documentStorageService.store(document, documentId, existingDocument.getDocumentType().name());
 
-        log.info(
-                "Verification document updated successfully. documentId={}, documentType={}, status={}",
-                saved.getDocumentId(),
-                saved.getDocumentType(),
-                saved.getStatus()
-        );
+            /*
+             * Update the existing document record instead
+             * of creating a new VerificationDocument.
+             */
+            existingDocument.setDocumentType(existingDocument.getDocumentType());
 
+            existingDocument.setDocumentNumber(request.getDocumentNumber());
 
-        return verificationMapper.toVerificationDocumentResponse(
-                saved
-        );
+            existingDocument.setDocumentScope(request.getDocumentScope());
+
+            existingDocument.setIssuedAt(request.getIssuedAt());
+
+            existingDocument.setExpiryDate(request.getExpiryDate());
+
+            existingDocument.setDocumentUrl(newStorageReference);
+
+            /*
+             * A re-upload starts the verification process again.
+             */
+            existingDocument.setStatus(DocumentStatus.UNDER_REVIEW);
+
+            existingDocument.setRejectionReason(null);
+
+            existingDocument.setVerifiedAt(null);
+
+            VerificationDocument saved =
+                    documentRepository.save(existingDocument);
+
+            /*
+             * Database update succeeded.
+             *
+             * The old file is now no longer required.
+             */
+            if (oldStorageReference != null && !oldStorageReference.equals(newStorageReference)) {
+
+                documentStorageService.delete(oldStorageReference);
+            }
+
+            log.info(
+                    "Verification document updated successfully. documentId={}, status={}",
+                    saved.getDocumentId(),
+                    saved.getStatus()
+            );
+
+            return verificationMapper.toVerificationDocumentResponse(saved);
+
+        } catch (RuntimeException exception) {
+
+            /*
+             * If a new file was stored but the DB update failed,
+             * remove the newly stored file to avoid orphaned files.
+             */
+            if (newStorageReference != null) {
+
+                log.warn(
+                        "Cleaning up newly stored document after update failure. documentId={}",
+                        documentId
+                );
+
+                documentStorageService.delete(
+                        newStorageReference
+                );
+            }
+
+            log.error(
+                    "Failed to update verification document. documentId={}",
+                    documentId,
+                    exception
+            );
+
+            throw exception;
+        }
     }
 
+    /**
+     * Validates that a document of the specified type has not already been submitted for the given application.
+     *
+     * @param applicationId The ID of the verification application.
+     * @param documentType  The type of the document being submitted.
+     * @throws DuplicateVerificationDocumentException If a document of the same type has already been submitted for this application.
+     */
     private void validateDocumentTypeNotAlreadySubmitted(
             Long applicationId,
             com.ordertracking.verification.enums.DocumentType documentType) {
 
-        boolean exists =
-                documentRepository
-                        .existsByVerificationApplicationIdAndDocumentType(
+        boolean exists = documentRepository.existsByVerificationApplicationIdAndDocumentType(
                                 applicationId,
                                 documentType
                         );
@@ -339,15 +412,16 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
         }
     }
 
-
+    /**
+     * Validates that a document with the specified number has not already been submitted.
+     *
+     * @param documentNumber The number of the document being submitted.
+     * @throws DuplicateVerificationDocumentException If a document with the same number has already been submitted.
+     */
     private void validateDuplicateDocumentNumber(
             String documentNumber) {
 
-        boolean exists =
-                documentRepository
-                        .existsByDocumentNumberIgnoreCase(
-                                documentNumber
-                        );
+        boolean exists = documentRepository.existsByDocumentNumberIgnoreCase(documentNumber);
 
 
         if (exists) {
@@ -364,15 +438,18 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
         }
     }
 
+    /**
+     * Masks a document number for logging purposes, showing only the last 4 characters.
+     *
+     * @param documentNumber The document number to mask.
+     * @return A masked version of the document number.
+     */
     private String maskDocumentNumber(String documentNumber) {
 
         if (documentNumber == null || documentNumber.length() <= 4) {
             return "****";
         }
 
-        return "****" +
-                documentNumber.substring(
-                        documentNumber.length() - 4
-                );
+        return "****" + documentNumber.substring(documentNumber.length() - 4);
     }
 }
