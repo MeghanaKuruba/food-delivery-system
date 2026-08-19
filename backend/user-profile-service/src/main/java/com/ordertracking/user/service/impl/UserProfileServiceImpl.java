@@ -33,6 +33,11 @@ public class UserProfileServiceImpl implements UserProfileService {
 
     private final LocationValidationService locationValidationService;
 
+    /**
+     * This method is triggered when a new user is created.
+     * It creates a new user profile in the database.
+     */
+    @Override
     public void createProfile(UserCreatedEvent event) {
         // Check if the user profile already exists
         if (userProfileRepository.existsByAuthUserId(event.getAuthUserId())) {
@@ -55,6 +60,13 @@ public class UserProfileServiceImpl implements UserProfileService {
         log.info("User profile created for authUserId={}", event.getAuthUserId());
     }
 
+    /**
+     * Retrieves the user profile for the given authenticated user ID.
+     *
+     * @param authUserId The authenticated user ID.
+     * @return The user profile response.
+     * @throws UserProfileNotFoundException if the user profile is not found.
+     */
     @Override
     public UserProfileResponse getProfile(Long authUserId) {
 
@@ -66,6 +78,15 @@ public class UserProfileServiceImpl implements UserProfileService {
         return userProfileMapper.toUserProfileResponse(profile);
     }
 
+    /**
+     * Updates the user profile for the given authenticated user ID.
+     *
+     * @param authUserId The authenticated user ID.
+     * @param request    The update profile request containing the new profile information.
+     * @return The updated user profile response.
+     * @throws UserProfileNotFoundException if the user profile is not found.
+     * @throws InvalidProfileException       if the provided profile information is invalid.
+     */
     @Override
     @Transactional
     public UserProfileResponse updateProfile(Long authUserId, UpdateProfileRequest request) {
@@ -107,6 +128,15 @@ public class UserProfileServiceImpl implements UserProfileService {
         return userProfileMapper.toUserProfileResponse(userProfileRepository.save(profile));
     }
 
+    /**
+     * Updates the user profile for the given authenticated user ID.
+     *
+     * @param authUserId The authenticated user ID.
+     * @param request    The update profile request containing the new profile information.
+     * @return The updated user profile response.
+     * @throws UserProfileNotFoundException if the user profile is not found.
+     * @throws InvalidProfileException       if the provided profile information is invalid.
+     */
     @Override
     @Transactional
     public UserProfileResponse addAddress(Long authUserId, AddAddressRequest request) {
@@ -182,6 +212,12 @@ public class UserProfileServiceImpl implements UserProfileService {
         return userProfileMapper.toUserProfileResponse(profile);
     }
 
+    /**
+     * Retrieves the list of addresses for the given authenticated user ID.
+     *
+     * @param authUserId The authenticated user ID.
+     * @return A list of address responses.
+     */
     @Override
     public List<AddressResponse> getAddresses(Long authUserId) {
 
@@ -193,6 +229,17 @@ public class UserProfileServiceImpl implements UserProfileService {
 
     }
 
+    /**
+     * Updates an existing address for the given authenticated user ID and address ID.
+     *
+     * @param authUserId The authenticated user ID.
+     * @param addressId  The ID of the address to update.
+     * @param request    The update address request containing the new address information.
+     * @return The updated address response.
+     * @throws AddressNotFoundException      if the address is not found for the given user.
+     * @throws DuplicateAddressException     if the updated address already exists for the user.
+     * @throws InvalidAddressException       if the provided address information does not match validated data.
+     */
     @Override
     @Transactional
     public AddressResponse updateAddress(Long authUserId, Long addressId, UpdateAddressRequest request) {
@@ -260,6 +307,14 @@ public class UserProfileServiceImpl implements UserProfileService {
         return userProfileMapper.toAddressResponse(address);
     }
 
+    /**
+     * Deletes an existing address for the given authenticated user ID and address ID.
+     * If the deleted address was the default address, the first remaining address (if any) will be set as the new default.
+     *
+     * @param authUserId The authenticated user ID.
+     * @param addressId  The ID of the address to delete.
+     * @throws AddressNotFoundException if the address is not found for the given user.
+     */
     @Override
     @Transactional
     public void deleteAddress(Long authUserId, Long addressId) {
@@ -287,6 +342,15 @@ public class UserProfileServiceImpl implements UserProfileService {
 
     }
 
+    /**
+     * Sets the specified address as the default address for the given authenticated user ID.
+     * All other addresses for the user will have their default status removed.
+     *
+     * @param authUserId The authenticated user ID.
+     * @param addressId  The ID of the address to set as default.
+     * @return The updated address response for the new default address.
+     * @throws AddressNotFoundException if the address is not found for the given user.
+     */
     @Override
     @Transactional
     public AddressResponse setDefaultAddress(Long authUserId, Long addressId) {
@@ -313,6 +377,14 @@ public class UserProfileServiceImpl implements UserProfileService {
         return userProfileMapper.toAddressResponse(updated);
     }
 
+    /**
+     * Retrieves a specific address for the given authenticated user ID and address ID.
+     *
+     * @param authUserId The authenticated user ID.
+     * @param addressId  The ID of the address to retrieve.
+     * @return The address response for the specified address.
+     * @throws AddressNotFoundException if the address is not found for the given user.
+     */
     @Override
     public AddressResponse getAddressById(Long authUserId, Long addressId) {
 

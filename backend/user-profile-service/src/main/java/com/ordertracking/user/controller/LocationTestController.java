@@ -16,6 +16,12 @@ public class LocationTestController {
 
     private final LocationValidationService locationValidationService;
 
+    /**
+     * Endpoint to validate an address using the LocationValidationService.
+     *
+     * @param request The address validation request containing the address details.
+     * @return An AddressValidationResponse indicating whether the address is valid and providing additional details.
+     */
     @PostMapping("/validate-address")
     public AddressValidationResponse validate(
             @RequestBody AddressValidationRequest request

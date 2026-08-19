@@ -23,6 +23,13 @@ public class GeoapifyLocationValidationService implements LocationValidationServ
     @Value("${geoapify.base-url}")
     private String baseUrl;
 
+    /**
+     * Validates the provided address using the Geoapify API.
+     *
+     * @param request The address validation request containing the address details.
+     * @return An AddressValidationResponse indicating whether the address is valid and providing additional details.
+     * @throws InvalidAddressException If the address could not be validated or is invalid.
+     */
     @Override
     public AddressValidationResponse validate(AddressValidationRequest request) {
 
