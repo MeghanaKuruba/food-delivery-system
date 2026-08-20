@@ -16,5 +16,7 @@ public enum DocumentStatus {
 
     REJECTED,
 
-    REUPLOAD_REQUIRED
+    REUPLOAD_REQUIRED,
+
+    MANUAL_REVIEW
 }

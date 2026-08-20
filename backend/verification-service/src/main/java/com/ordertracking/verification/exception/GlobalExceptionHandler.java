@@ -37,6 +37,12 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, "Validation Failed", message, request);
     }
 
+    @ExceptionHandler(InvalidDocumentStatusTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidDocumentStatusTransitionException(
+            InvalidDocumentStatusTransitionException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Invalid Document Status Transition", ex.getMessage(), request);
+    }
+
     @ExceptionHandler(VerificationApplicationNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleVerificationApplicationNotFoundException(
             VerificationApplicationNotFoundException ex, HttpServletRequest request) {

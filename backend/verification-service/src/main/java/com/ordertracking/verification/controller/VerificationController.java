@@ -4,6 +4,7 @@ import com.ordertracking.verification.dto.*;
 import com.ordertracking.verification.enums.DocumentScope;
 import com.ordertracking.verification.enums.DocumentType;
 import com.ordertracking.verification.service.VerificationDocumentService;
+import com.ordertracking.verification.service.VerificationDocumentVerificationService;
 import com.ordertracking.verification.service.VerificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,8 @@ public class VerificationController {
     private final VerificationService verificationService;
 
     private final VerificationDocumentService verificationDocumentService;
+
+    private final VerificationDocumentVerificationService verificationDocumentVerificationService;
 
     /**
      * Create a new verification application.
@@ -159,5 +162,21 @@ public class VerificationController {
                         .build();
 
         return ResponseEntity.ok(verificationDocumentService.updateDocument(documentId, request, document));
+    }
+
+    /**
+     * Verify a verification document by its ID.
+     *
+     * @param documentId the ID of the verification document
+     * @return ResponseEntity containing the verification document response after verification
+     */
+    @PostMapping("/documents/{documentId}/verify")
+    public ResponseEntity<VerificationDocumentResponse> verifyDocument(
+            @PathVariable String documentId) {
+
+        return ResponseEntity.ok(
+                verificationDocumentVerificationService
+                        .verifyDocument(documentId)
+        );
     }
 }
