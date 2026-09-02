@@ -1,6 +1,7 @@
 package com.ordertracking.verification.service.impl;
 
 import com.ordertracking.verification.dto.VerificationDocumentResponse;
+import com.ordertracking.verification.dto.VerificationResult;
 import com.ordertracking.verification.entity.VerificationDocument;
 import com.ordertracking.verification.enums.DocumentStatus;
 import com.ordertracking.verification.exception.VerificationDocumentNotFoundException;
@@ -8,6 +9,7 @@ import com.ordertracking.verification.mapper.VerificationMapper;
 import com.ordertracking.verification.repository.VerificationDocumentRepository;
 import com.ordertracking.verification.service.DocumentStatusTransitionService;
 import com.ordertracking.verification.service.VerificationDocumentVerificationService;
+import com.ordertracking.verification.service.VerificationEngine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,8 @@ public class VerificationDocumentVerificationServiceImpl
             documentStatusTransitionService;
 
     private final VerificationMapper verificationMapper;
+
+    private final VerificationEngine verificationEngine;
 
     @Override
     @Transactional
@@ -65,28 +69,20 @@ public class VerificationDocumentVerificationServiceImpl
             );
         }
 
-        /*
-         * For now we are establishing the verification
-         * workflow. The actual verification engine will
-         * be implemented next.
-         */
-        DocumentStatus verificationResult = determineVerificationResult(document);
+        VerificationResult verificationResult = verificationEngine.verify(document);
 
-        documentStatusTransitionService.validateTransition(currentStatus, verificationResult);
+        DocumentStatus newStatus = verificationResult.status();
 
-        document.setStatus(verificationResult);
+        documentStatusTransitionService.validateTransition(currentStatus, newStatus);
 
-        if (verificationResult == DocumentStatus.VERIFIED) {
+        document.setStatus(newStatus);
+        document.setRejectionReason(verificationResult.reason());
+
+        if (newStatus == DocumentStatus.VERIFIED) {
             document.setVerifiedAt(java.time.LocalDateTime.now());
 
             document.setRejectionReason(null);
-        }
-
-        if (verificationResult == DocumentStatus.REUPLOAD_REQUIRED) {
-            document.setVerifiedAt(null);
-        }
-
-        if (verificationResult == DocumentStatus.REJECTED) {
+        }else {
             document.setVerifiedAt(null);
         }
 
@@ -100,17 +96,5 @@ public class VerificationDocumentVerificationServiceImpl
         );
 
         return verificationMapper.toVerificationDocumentResponse(saved);
-    }
-
-    private DocumentStatus determineVerificationResult(VerificationDocument document) {
-
-        /*
-         * Temporary placeholder.
-         *
-         * We will replace this method with our actual
-         * verification engine / mock government-data
-         * verification flow.
-         */
-        return DocumentStatus.VERIFIED;
     }
 }
