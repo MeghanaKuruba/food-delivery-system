@@ -11,6 +11,10 @@ public class MonitorSearchingTimeouts {
 
     private final DeliveryPartnerService deliveryPartnerService;
 
+    /**
+     * Scheduled task that runs every 10 seconds to monitor searching timeouts for deliveries.
+     * This method invokes the monitorSearchingTimeouts method of the DeliveryPartnerService.
+     */
     @Scheduled(fixedDelay = 10000) // Run every 10 seconds
     public void monitorSearchingTimeouts() {
         deliveryPartnerService.monitorSearchingTimeouts();

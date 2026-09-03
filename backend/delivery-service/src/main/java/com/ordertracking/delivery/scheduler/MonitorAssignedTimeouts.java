@@ -10,6 +10,11 @@ import org.springframework.stereotype.Component;
 public class MonitorAssignedTimeouts {
 
     private final DeliveryPartnerService deliveryPartnerService;
+
+    /**
+     * Scheduled task that runs every 5 seconds to monitor assigned timeouts for deliveries.
+     * This method invokes the monitorAssignedTimeouts method of the DeliveryPartnerService.
+     */
     @Scheduled(fixedDelay = 5000) // Run every 5 seconds
     public  void monitorAssignedTimeouts() {
         deliveryPartnerService.monitorAssignedTimeouts();
