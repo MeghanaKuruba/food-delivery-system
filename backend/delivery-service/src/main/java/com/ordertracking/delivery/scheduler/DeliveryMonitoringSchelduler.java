@@ -11,6 +11,10 @@ public class DeliveryMonitoringSchelduler {
 
     private final DeliveryPartnerService deliveryPartnerService;
 
+    /**
+     * Scheduled task that runs every 5 seconds to monitor offline delivery partners.
+     * This method invokes the monitorOfflinePartners method of the DeliveryPartnerService.
+     */
     @Scheduled(fixedDelay = 5000) // Run every 5 seconds
     public void monitorOfflinePartners() {
         deliveryPartnerService.monitorOfflinePartners();
