@@ -1,7 +1,6 @@
 package com.ordertracking.verification.controller;
 
 import com.ordertracking.verification.dto.*;
-import com.ordertracking.verification.enums.DocumentScope;
 import com.ordertracking.verification.service.VerificationDocumentService;
 import com.ordertracking.verification.service.VerificationDocumentVerificationService;
 import com.ordertracking.verification.service.VerificationService;
@@ -15,8 +14,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -193,7 +190,6 @@ public class VerificationController {
      *
      * @param documentId     the ID of the verification document
      * @param documentNumber the number of the document
-     * @param documentScope  the scope of the document
      * @param issuedAt       the issue date of the document (optional)
      * @param expiryDate     the expiry date of the document (optional)
      * @param document       the new document file (optional)
@@ -219,9 +215,6 @@ public class VerificationController {
             @Parameter(description = "Document Number", example = "123456")
             @RequestParam("documentNumber") String documentNumber,
 
-            @Parameter(description = "Document Scope", example = "PERSON")
-            @RequestParam("documentScope") DocumentScope documentScope,
-
             @Parameter(description = "Issue Date", example = "2025-01-01")
             @RequestParam(required = false) LocalDate issuedAt,
 
@@ -234,7 +227,6 @@ public class VerificationController {
         UpdateVerificationDocumentRequest request =
                 UpdateVerificationDocumentRequest.builder()
                         .documentNumber(documentNumber)
-                        .documentScope(documentScope)
                         .issuedAt(issuedAt)
                         .expiryDate(expiryDate)
                         .build();

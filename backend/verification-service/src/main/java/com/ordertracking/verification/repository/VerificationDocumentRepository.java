@@ -13,9 +13,5 @@ public interface VerificationDocumentRepository extends JpaRepository<Verificati
 
     List<VerificationDocument> findByStatus(DocumentStatus status);
 
-    boolean existsByDocumentNumberIgnoreCase(String documentNumber);
-
     boolean existsByVerificationApplicationIdAndDocumentType(Long applicationId, DocumentType documentType);
-
-    boolean existsByDocumentNumberIgnoreCaseAndDocumentIdNot(String documentNumber, String documentId);
 }

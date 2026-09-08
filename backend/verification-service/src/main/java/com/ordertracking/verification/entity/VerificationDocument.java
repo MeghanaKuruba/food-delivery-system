@@ -1,12 +1,10 @@
 package com.ordertracking.verification.entity;
 
-import com.ordertracking.verification.enums.DocumentScope;
 import com.ordertracking.verification.enums.DocumentStatus;
 import com.ordertracking.verification.enums.DocumentType;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -16,10 +14,6 @@ import java.time.LocalDateTime;
                 @Index(
                         name = "idx_verification_document_application",
                         columnList = "verification_application_id"
-                ),
-                @Index(
-                        name = "idx_verification_document_number",
-                        columnList = "document_number"
                 )
         }
 )
@@ -31,7 +25,12 @@ import java.time.LocalDateTime;
 public class VerificationDocument {
 
     @Id
-    @Column(name = "document_id", nullable = false, unique = true, length = 20)
+    @Column(
+            name = "document_id",
+            nullable = false,
+            unique = true,
+            length = 20
+    )
     private String documentId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -45,21 +44,16 @@ public class VerificationDocument {
     @Column(nullable = false, length = 40)
     private DocumentType documentType;
 
-    @Column(name = "document_number", length = 100)
-    private String documentNumber;
-
     /**
-     * Temporary reference to the uploaded document.
+     * Reference to the stored document.
      *
-     * For now this can be a local/mock path.
-     * Later this will point to object storage.
+     * This is a storage reference, not the actual file contents.
      */
-    @Column(name = "document_url", length = 500)
+    @Column(
+            name = "document_url",
+            length = 500
+    )
     private String documentUrl;
-
-    private LocalDate issuedAt;
-
-    private LocalDate expiryDate;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -68,10 +62,6 @@ public class VerificationDocument {
 
     @Column(length = 500)
     private String rejectionReason;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private DocumentScope documentScope;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime uploadedAt;
