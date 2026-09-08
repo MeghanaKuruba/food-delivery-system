@@ -54,8 +54,7 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
         log.info(
                 "Submitting verification document. applicationId={}, documentType={}, scope={}",
                 applicationId,
-                request.getDocumentType(),
-                request.getDocumentScope()
+                request.getDocumentType()
         );
 
         VerificationApplication application =
@@ -74,8 +73,6 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
 
         validateDocumentTypeNotAlreadySubmitted(applicationId, request.getDocumentType());
 
-        validateDuplicateDocumentNumber(request.getDocumentNumber());
-
         documentFileValidationService.validateAndDetectType(request.getDocument());
 
         VerificationDocument document =
@@ -83,8 +80,6 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                         request,
                         application
                 );
-
-        document.setDocumentScope(request.getDocumentScope());
 
         document.setStatus(DocumentStatus.UNDER_REVIEW);
 
@@ -236,8 +231,7 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
         log.info(
                 "Updating verification document. documentId={}, documentType={}, scope={}",
                 documentId,
-                existingDocument.getDocumentType(),
-                request.getDocumentScope()
+                existingDocument.getDocumentType()
         );
 
         DocumentStatus currentStatus = existingDocument.getStatus();
@@ -258,28 +252,6 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
 
             throw new IllegalStateException(
                     "Document cannot be updated in its current status."
-            );
-        }
-
-        /*
-         * Do not allow the same document number to be
-         * associated with another document record.
-         *
-         * The current document itself is excluded from
-         * the duplicate check.
-         */
-        boolean duplicateExists = documentRepository.existsByDocumentNumberIgnoreCaseAndDocumentIdNot(request.getDocumentNumber(), documentId);
-
-        if (duplicateExists) {
-
-            log.warn(
-                    "Duplicate document number detected during update. documentId={}, documentType={}",
-                    documentId,
-                    existingDocument.getDocumentType()
-            );
-
-            throw new DuplicateVerificationDocumentException(
-                    "This document has already been submitted."
             );
         }
 
@@ -309,14 +281,6 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
              * of creating a new VerificationDocument.
              */
             existingDocument.setDocumentType(existingDocument.getDocumentType());
-
-            existingDocument.setDocumentNumber(request.getDocumentNumber());
-
-            existingDocument.setDocumentScope(request.getDocumentScope());
-
-            existingDocument.setIssuedAt(request.getIssuedAt());
-
-            existingDocument.setExpiryDate(request.getExpiryDate());
 
             existingDocument.setDocumentUrl(newStorageReference);
 
@@ -408,32 +372,6 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                             " document has already been submitted " +
                             "for this verification application. " +
                             "Use the update document operation to replace it."
-            );
-        }
-    }
-
-    /**
-     * Validates that a document with the specified number has not already been submitted.
-     *
-     * @param documentNumber The number of the document being submitted.
-     * @throws DuplicateVerificationDocumentException If a document with the same number has already been submitted.
-     */
-    private void validateDuplicateDocumentNumber(
-            String documentNumber) {
-
-        boolean exists = documentRepository.existsByDocumentNumberIgnoreCase(documentNumber);
-
-
-        if (exists) {
-
-            log.warn(
-                    "Duplicate verification document submission attempted. documentType={}, documentNumber={}",
-                    "REDACTED",
-                    maskDocumentNumber(documentNumber)
-            );
-
-            throw new DuplicateVerificationDocumentException(
-                    "This document has already been submitted."
             );
         }
     }

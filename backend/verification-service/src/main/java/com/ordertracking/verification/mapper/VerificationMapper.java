@@ -39,10 +39,7 @@ public class VerificationMapper {
                                 .getReferenceId()
                 )
                 .documentType(document.getDocumentType())
-                .documentNumber(document.getDocumentNumber())
                 .documentUrl(document.getDocumentUrl())
-                .issuedAt(document.getIssuedAt())
-                .expiryDate(document.getExpiryDate())
                 .status(document.getStatus())
                 .rejectionReason(document.getRejectionReason())
                 .uploadedAt(document.getUploadedAt())
@@ -55,19 +52,13 @@ public class VerificationMapper {
             VerificationApplication application) {
 
         String documentId =
-                generateDocumentId(
-                        request.getDocumentType()
-                );
+                generateDocumentId(request.getDocumentType());
 
         return VerificationDocument.builder()
                 .documentId(documentId)
                 .verificationApplication(application)
                 .documentType(request.getDocumentType())
-                .documentNumber(request.getDocumentNumber())
-                .issuedAt(request.getIssuedAt())
-                .expiryDate(request.getExpiryDate())
                 .status(DocumentStatus.UPLOADED)
-                .documentScope(request.getDocumentScope())
                 .build();
     }
 

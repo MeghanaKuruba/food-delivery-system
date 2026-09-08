@@ -4,7 +4,6 @@ import com.ordertracking.verification.enums.DocumentStatus;
 import com.ordertracking.verification.enums.DocumentType;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -20,13 +19,7 @@ public class VerificationDocumentResponse {
 
     private DocumentType documentType;
 
-    private String documentNumber;
-
     private String documentUrl;
-
-    private LocalDate issuedAt;
-
-    private LocalDate expiryDate;
 
     private DocumentStatus status;
 
