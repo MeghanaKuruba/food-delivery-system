@@ -6,12 +6,14 @@ import com.ordertracking.verification.dto.VerificationDocumentResponse;
 import com.ordertracking.verification.entity.VerificationApplication;
 import com.ordertracking.verification.entity.VerificationDocument;
 import com.ordertracking.verification.enums.DocumentStatus;
+import com.ordertracking.verification.enums.DocumentType;
 import com.ordertracking.verification.exception.DuplicateVerificationDocumentException;
 import com.ordertracking.verification.exception.VerificationApplicationNotFoundException;
 import com.ordertracking.verification.exception.VerificationDocumentNotFoundException;
 import com.ordertracking.verification.mapper.VerificationMapper;
 import com.ordertracking.verification.repository.VerificationApplicationRepository;
 import com.ordertracking.verification.repository.VerificationDocumentRepository;
+import com.ordertracking.verification.service.VerificationApplicationValidationService;
 import com.ordertracking.verification.service.VerificationDocumentService;
 import com.ordertracking.verification.service.storage.DocumentFileValidationService;
 import com.ordertracking.verification.service.storage.DocumentStorageService;
@@ -34,6 +36,8 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
     private final VerificationDocumentRepository documentRepository;
 
     private final VerificationMapper verificationMapper;
+
+    private final VerificationApplicationValidationService verificationApplicationValidationService;
 
     private final DocumentStorageService documentStorageService;
 
@@ -70,6 +74,8 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                                     "Verification application not found."
                             );
                         });
+
+        verificationApplicationValidationService.validateDocumentAllowedForApplicant(application, request.getDocumentType());
 
         validateDocumentTypeNotAlreadySubmitted(applicationId, request.getDocumentType());
 
@@ -349,29 +355,23 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
      * @param documentType  The type of the document being submitted.
      * @throws DuplicateVerificationDocumentException If a document of the same type has already been submitted for this application.
      */
-    private void validateDocumentTypeNotAlreadySubmitted(
-            Long applicationId,
-            com.ordertracking.verification.enums.DocumentType documentType) {
+    private void validateDocumentTypeNotAlreadySubmitted(Long applicationId, DocumentType documentType) {
 
-        boolean exists = documentRepository.existsByVerificationApplicationIdAndDocumentType(
-                                applicationId,
-                                documentType
-                        );
+        boolean alreadySubmitted =
+                documentRepository.existsByVerificationApplicationIdAndDocumentType(
+                        applicationId,
+                        documentType
+                );
 
-
-        if (exists) {
-
+        if (alreadySubmitted) {
             log.warn(
-                    "Duplicate document type submission rejected. applicationId={}, documentType={}",
+                    "Document type already submitted. applicationId={}, documentType={}",
                     applicationId,
                     documentType
             );
 
-            throw new DuplicateVerificationDocumentException(
-                    "A " + documentType +
-                            " document has already been submitted " +
-                            "for this verification application. " +
-                            "Use the update document operation to replace it."
+            throw new IllegalStateException(
+                    "Document type " + documentType + " has already been submitted."
             );
         }
     }
