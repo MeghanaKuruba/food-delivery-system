@@ -5,6 +5,7 @@ import com.ordertracking.verification.entity.VerificationApplication;
 import com.ordertracking.verification.entity.VerificationDocument;
 import com.ordertracking.verification.enums.ApplicantType;
 import com.ordertracking.verification.enums.DocumentType;
+import com.ordertracking.verification.enums.VerificationStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.EnumSet;
@@ -54,6 +55,17 @@ public class VerificationApplicationValidationService {
                             + documentType
                             + " is not required for applicant type "
                             + application.getApplicantType()
+            );
+        }
+    }
+
+    public void validateApplicationCanBeSubmitted(
+            VerificationApplication application) {
+
+        if (application.getStatus() != VerificationStatus.PENDING) {
+
+            throw new IllegalStateException(
+                    "Verification application cannot be submitted in its current status."
             );
         }
     }

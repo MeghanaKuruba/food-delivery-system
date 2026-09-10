@@ -87,7 +87,7 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                         application
                 );
 
-        document.setStatus(DocumentStatus.UNDER_REVIEW);
+//        document.setStatus(DocumentStatus.UPLOADED);
 
         String documentId = document.getDocumentId();
 
