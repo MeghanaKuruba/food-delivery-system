@@ -12,4 +12,6 @@ public interface VerificationService {
     VerificationApplicationResponse getApplication(Long applicationId);
 
     List<VerificationApplicationResponse> getApplicationsByUser(Long authUserId);
+
+    VerificationApplicationResponse submitApplication(Long applicationId);
 }

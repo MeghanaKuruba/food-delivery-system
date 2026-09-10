@@ -1,6 +1,7 @@
 package com.ordertracking.verification.controller;
 
 import com.ordertracking.verification.dto.*;
+import com.ordertracking.verification.service.VerificationDocumentDataService;
 import com.ordertracking.verification.service.VerificationDocumentService;
 import com.ordertracking.verification.service.VerificationDocumentVerificationService;
 import com.ordertracking.verification.service.VerificationService;
@@ -258,5 +259,11 @@ public class VerificationController {
                 verificationDocumentVerificationService
                         .verifyDocument(documentId)
         );
+    }
+
+    @PostMapping("/{applicationId}/submit")
+    public ResponseEntity<VerificationApplicationResponse> submitApplication(@PathVariable Long applicationId) {
+
+        return ResponseEntity.ok(verificationService.submitApplication(applicationId));
     }
 }
