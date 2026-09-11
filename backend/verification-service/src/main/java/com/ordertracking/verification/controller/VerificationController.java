@@ -1,7 +1,6 @@
 package com.ordertracking.verification.controller;
 
 import com.ordertracking.verification.dto.*;
-import com.ordertracking.verification.service.VerificationDocumentDataService;
 import com.ordertracking.verification.service.VerificationDocumentService;
 import com.ordertracking.verification.service.VerificationDocumentVerificationService;
 import com.ordertracking.verification.service.VerificationService;
@@ -246,7 +245,7 @@ public class VerificationController {
             description = "Performs verification of a submitted document and updates its verification status."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Document verified successfully"),
+            @ApiResponse(responseCode = "200", description = "Document verification processed successfully"),
             @ApiResponse(responseCode = "404", description = "Document not found"),
             @ApiResponse(responseCode = "409", description = "Document already verified")
     })
@@ -255,10 +254,7 @@ public class VerificationController {
             @Parameter(description = "Document ID")
             @PathVariable String documentId) {
 
-        return ResponseEntity.ok(
-                verificationDocumentVerificationService
-                        .verifyDocument(documentId)
-        );
+        return ResponseEntity.ok(verificationDocumentVerificationService.verifyDocument(documentId));
     }
 
     @PostMapping("/{applicationId}/submit")

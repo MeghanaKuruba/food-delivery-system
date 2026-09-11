@@ -8,6 +8,7 @@ import com.ordertracking.verification.exception.VerificationApplicationNotFoundE
 import com.ordertracking.verification.mapper.VerificationMapper;
 import com.ordertracking.verification.repository.VerificationApplicationRepository;
 import com.ordertracking.verification.service.VerificationApplicationValidationService;
+import com.ordertracking.verification.service.VerificationDocumentVerificationService;
 import com.ordertracking.verification.service.VerificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,8 @@ public class VerificationServiceImpl implements VerificationService {
     private final VerificationMapper verificationMapper;
 
     private final VerificationApplicationValidationService verificationApplicationValidationService;
+
+    private final VerificationDocumentVerificationService verificationDocumentVerificationService;
 
     @Override
     public VerificationApplicationResponse createApplication(CreateVerificationApplicationRequest request) {
@@ -139,6 +142,8 @@ public class VerificationServiceImpl implements VerificationService {
                 saved.getId(),
                 saved.getStatus()
         );
+
+        verificationDocumentVerificationService.verifyDocuments(saved.getId());
 
         return verificationMapper.toVerificationAppResponse(saved);
     }

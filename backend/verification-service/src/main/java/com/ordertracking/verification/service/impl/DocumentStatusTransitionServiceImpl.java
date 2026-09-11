@@ -1,5 +1,6 @@
 package com.ordertracking.verification.service.impl;
 
+import com.ordertracking.verification.entity.VerificationDocument;
 import com.ordertracking.verification.enums.DocumentStatus;
 import com.ordertracking.verification.exception.InvalidDocumentStatusTransitionException;
 import com.ordertracking.verification.service.DocumentStatusTransitionService;
@@ -8,8 +9,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
-public class DocumentStatusTransitionServiceImpl
-        implements DocumentStatusTransitionService {
+public class DocumentStatusTransitionServiceImpl implements DocumentStatusTransitionService {
 
     @Override
     public void validateTransition(DocumentStatus currentStatus, DocumentStatus newStatus) {
@@ -101,4 +101,11 @@ public class DocumentStatusTransitionServiceImpl
             );
         }
     }
+
+    @Override
+    public void transition(VerificationDocument document, DocumentStatus targetStatus) {
+        validateTransition(document.getStatus(), targetStatus);
+        document.setStatus(targetStatus);
+    }
+
 }

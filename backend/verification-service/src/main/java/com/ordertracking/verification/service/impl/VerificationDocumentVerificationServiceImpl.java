@@ -15,86 +15,123 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class VerificationDocumentVerificationServiceImpl
-        implements VerificationDocumentVerificationService {
+public class VerificationDocumentVerificationServiceImpl implements VerificationDocumentVerificationService {
 
     private final VerificationDocumentRepository documentRepository;
 
-    private final DocumentStatusTransitionService
-            documentStatusTransitionService;
-
-    private final VerificationMapper verificationMapper;
+    private final DocumentStatusTransitionService documentStatusTransitionService;
 
     private final VerificationEngine verificationEngine;
+
+    private final VerificationMapper mapper;
+
+    @Override
+    @Transactional
+    public void verifyDocuments(Long applicationId) {
+
+        log.info(
+                "Starting verification for application. applicationId={}",
+                applicationId
+        );
+
+        List<VerificationDocument> documents =
+                documentRepository.findByVerificationApplicationId(
+                        applicationId
+                );
+
+        if (documents.isEmpty()) {
+
+            log.warn(
+                    "No documents found for verification application. applicationId={}",
+                    applicationId
+            );
+
+            throw new IllegalStateException(
+                    "No verification documents found."
+            );
+        }
+
+        for (VerificationDocument document : documents) {
+
+            verifyDocument(document.getDocumentId());
+        }
+
+        log.info(
+                "Document verification processing completed. applicationId={}",
+                applicationId
+        );
+    }
 
     @Override
     @Transactional
     public VerificationDocumentResponse verifyDocument(String documentId) {
 
-        log.info("Starting document verification. documentId={}", documentId);
+        log.info(
+                "Starting document verification. documentId={}",
+                documentId
+        );
 
         VerificationDocument document =
                 documentRepository.findById(documentId)
                         .orElseThrow(() -> {
-
                             log.warn(
                                     "Verification document not found. documentId={}",
                                     documentId
                             );
-
                             return new VerificationDocumentNotFoundException(
                                     "Verification document not found."
                             );
                         });
 
-        DocumentStatus currentStatus = document.getStatus();
-
-        /*
-         * A document should only enter verification
-         * when it is waiting for review.
-         */
-        if (currentStatus != DocumentStatus.UNDER_REVIEW) {
-
+        if (document.getStatus() == DocumentStatus.VERIFIED) {
             log.warn(
-                    "Document verification not allowed. documentId={}, status={}",
-                    documentId,
-                    currentStatus
+                    "Verification document is already verified. documentId={}",
+                    documentId
             );
 
             throw new IllegalStateException(
-                    "Document can only be verified when it is UNDER_REVIEW."
+                    "Verification document is already verified."
             );
         }
 
-        VerificationResult verificationResult = verificationEngine.verify(document);
+        documentStatusTransitionService.transition(
+                document,
+                DocumentStatus.UNDER_REVIEW
+        );
 
-        DocumentStatus newStatus = verificationResult.status();
+        document.setStatus(DocumentStatus.UNDER_REVIEW);
+        documentRepository.save(document);
 
-        documentStatusTransitionService.validateTransition(currentStatus, newStatus);
+        VerificationResult result = verificationEngine.verify(document);
 
-        document.setStatus(newStatus);
-        document.setRejectionReason(verificationResult.reason());
+        documentStatusTransitionService.transition(
+                document,
+                result.status()
+        );
 
-        if (newStatus == DocumentStatus.VERIFIED) {
-            document.setVerifiedAt(java.time.LocalDateTime.now());
-
-            document.setRejectionReason(null);
-        }else {
-            document.setVerifiedAt(null);
+        if (result.reason() != null) {
+            document.setRejectionReason(result.reason());
         }
 
-        VerificationDocument saved = documentRepository.save(document);
+        if (result.status() == DocumentStatus.VERIFIED) {
+            document.setVerifiedAt(LocalDateTime.now());
+        }
+
+        VerificationDocument saved =
+                documentRepository.save(document);
 
         log.info(
-                "Document verification completed. documentId={}, previousStatus={}, newStatus={}",
-                documentId,
-                currentStatus,
+                "Document verification completed. documentId={}, status={}",
+                saved.getDocumentId(),
                 saved.getStatus()
         );
 
-        return verificationMapper.toVerificationDocumentResponse(saved);
+        return mapper.toVerificationDocumentResponse(saved);
     }
 }
