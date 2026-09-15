@@ -31,6 +31,7 @@ public class VerificationDocumentVerificationServiceImpl implements Verification
 
     private final VerificationMapper mapper;
 
+
     @Override
     @Transactional
     public void verifyDocuments(Long applicationId) {
@@ -80,16 +81,20 @@ public class VerificationDocumentVerificationServiceImpl implements Verification
         VerificationDocument document =
                 documentRepository.findById(documentId)
                         .orElseThrow(() -> {
+
                             log.warn(
                                     "Verification document not found. documentId={}",
                                     documentId
                             );
+
                             return new VerificationDocumentNotFoundException(
                                     "Verification document not found."
                             );
                         });
 
+
         if (document.getStatus() == DocumentStatus.VERIFIED) {
+
             log.warn(
                     "Verification document is already verified. documentId={}",
                     documentId
@@ -100,31 +105,46 @@ public class VerificationDocumentVerificationServiceImpl implements Verification
             );
         }
 
-        documentStatusTransitionService.transition(
-                document,
-                DocumentStatus.UNDER_REVIEW
-        );
 
-        document.setStatus(DocumentStatus.UNDER_REVIEW);
+        /*
+         * Verification starts here.
+         *
+         * UPLOADED means the document was successfully
+         * uploaded and stored.
+         *
+         * UNDER_REVIEW means verification processing
+         * has started.
+         */
+        documentStatusTransitionService.transition(document, DocumentStatus.UNDER_REVIEW);
+
+
+        /*
+         * Persist the workflow state before running
+         * the verification engine.
+         */
         documentRepository.save(document);
 
+        /*
+         * Run the verification engine.
+         */
         VerificationResult result = verificationEngine.verify(document);
 
-        documentStatusTransitionService.transition(
-                document,
-                result.status()
-        );
+        /*
+         * Apply the result through the centralized
+         * status transition rules.
+         */
+        documentStatusTransitionService.transition(document, result.status());
 
-        if (result.reason() != null) {
-            document.setRejectionReason(result.reason());
-        }
+        document.setRejectionReason(result.reason());
+
 
         if (result.status() == DocumentStatus.VERIFIED) {
             document.setVerifiedAt(LocalDateTime.now());
+        } else {
+            document.setVerifiedAt(null);
         }
 
-        VerificationDocument saved =
-                documentRepository.save(document);
+        VerificationDocument saved = documentRepository.save(document);
 
         log.info(
                 "Document verification completed. documentId={}, status={}",

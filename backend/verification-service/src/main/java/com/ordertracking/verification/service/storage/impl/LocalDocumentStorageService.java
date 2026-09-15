@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -166,6 +167,67 @@ public class LocalDocumentStorageService implements DocumentStorageService {
             log.error(
                     "Failed to delete verification document from storage. reference={}",
                     storageReference,
+                    exception
+            );
+        }
+    }
+
+    /**
+     * Loads the document from local storage based on the provided storage reference.
+     *
+     * @param storageReference The relative path to the document to be loaded.
+     * @return An InputStream of the document file.
+     * @throws IllegalArgumentException If the storage reference is invalid or if the file does not exist.
+     */
+    @Override
+    public InputStream load(String storageReference) {
+
+        if (storageReference == null
+                || storageReference.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Storage reference cannot be empty."
+            );
+        }
+
+        Path target =
+                storageRoot
+                        .resolve(storageReference)
+                        .normalize();
+
+        if (!target.startsWith(storageRoot)) {
+
+            log.warn(
+                    "Rejected invalid document load path."
+            );
+
+            throw new IllegalArgumentException(
+                    "Invalid document storage reference."
+            );
+        }
+
+        try {
+
+            if (!Files.exists(target)
+                    || !Files.isRegularFile(target)) {
+
+                throw new IllegalStateException(
+                        "Verification document file not found."
+                );
+            }
+
+            return Files.newInputStream(target);
+
+        } catch (IOException exception) {
+
+            log.error(
+                    "Failed to load verification document. reference={}",
+                    storageReference,
+                    exception
+            );
+
+            throw new IllegalStateException(
+                    "Unable to load verification document.",
                     exception
             );
         }
