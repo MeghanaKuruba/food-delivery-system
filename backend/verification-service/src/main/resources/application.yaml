@@ -35,3 +35,7 @@ management:
 document:
   storage:
     location: storage
+
+verification:
+  ocr:
+    language: eng

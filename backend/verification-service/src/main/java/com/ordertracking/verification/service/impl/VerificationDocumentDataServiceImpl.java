@@ -23,9 +23,7 @@ public class VerificationDocumentDataServiceImpl implements VerificationDocument
 
     @Override
     @Transactional
-    public PanDataDetailsResponse addPanData(
-            String documentId,
-            PanDataDetailsRequest request) {
+    public PanDataDetailsResponse addPanData(String documentId, PanDataDetailsRequest request) {
 
         log.info(
                 "Adding PAN data. documentId={}",

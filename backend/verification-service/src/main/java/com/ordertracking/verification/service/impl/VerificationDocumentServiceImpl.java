@@ -13,6 +13,7 @@ import com.ordertracking.verification.exception.VerificationDocumentNotFoundExce
 import com.ordertracking.verification.mapper.VerificationMapper;
 import com.ordertracking.verification.repository.VerificationApplicationRepository;
 import com.ordertracking.verification.repository.VerificationDocumentRepository;
+import com.ordertracking.verification.service.DocumentStatusTransitionService;
 import com.ordertracking.verification.service.VerificationApplicationValidationService;
 import com.ordertracking.verification.service.VerificationDocumentService;
 import com.ordertracking.verification.service.storage.DocumentFileValidationService;
@@ -37,6 +38,8 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
 
     private final VerificationMapper verificationMapper;
 
+    private final DocumentStatusTransitionService documentStatusTransitionService;
+
     private final VerificationApplicationValidationService verificationApplicationValidationService;
 
     private final DocumentStorageService documentStorageService;
@@ -50,13 +53,12 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
      * @param request       The request containing document details and the file.
      * @return A response containing the submitted document's details.
      * @throws VerificationApplicationNotFoundException If the application does not exist.
-     * @throws DuplicateVerificationDocumentException   If a document of the same type has already been submitted for this application or if the document number is already in use.
      */
     @Override
     public VerificationDocumentResponse submitDocument(Long applicationId, SubmitVerificationDocumentRequest request) {
 
         log.info(
-                "Submitting verification document. applicationId={}, documentType={}, scope={}",
+                "Submitting verification document. applicationId={}, documentType={}",
                 applicationId,
                 request.getDocumentType()
         );
@@ -70,9 +72,7 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                                     applicationId
                             );
 
-                            return new VerificationApplicationNotFoundException(
-                                    "Verification application not found."
-                            );
+                            return new VerificationApplicationNotFoundException("Verification application not found.");
                         });
 
         verificationApplicationValidationService.validateDocumentAllowedForApplicant(application, request.getDocumentType());
@@ -235,7 +235,7 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
                         });
 
         log.info(
-                "Updating verification document. documentId={}, documentType={}, scope={}",
+                "Updating verification document. documentId={}, documentType={}",
                 documentId,
                 existingDocument.getDocumentType()
         );
@@ -293,7 +293,7 @@ public class VerificationDocumentServiceImpl implements VerificationDocumentServ
             /*
              * A re-upload starts the verification process again.
              */
-            existingDocument.setStatus(DocumentStatus.UNDER_REVIEW);
+            documentStatusTransitionService.transition(existingDocument, DocumentStatus.UNDER_REVIEW);
 
             existingDocument.setRejectionReason(null);
 

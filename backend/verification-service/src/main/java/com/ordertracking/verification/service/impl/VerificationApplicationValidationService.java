@@ -15,8 +15,7 @@ import java.util.stream.Collectors;
 @Service
 public class VerificationApplicationValidationService {
 
-    public void validateRequiredDocuments(
-            VerificationApplication application) {
+    public void validateRequiredDocuments(VerificationApplication application) {
 
         Set<DocumentType> requiredDocuments =
                 VerificationDocumentRequirement.getRequiredDocuments(
@@ -42,9 +41,7 @@ public class VerificationApplicationValidationService {
         }
     }
 
-    public void validateDocumentAllowedForApplicant(
-            VerificationApplication application,
-            DocumentType documentType) {
+    public void validateDocumentAllowedForApplicant(VerificationApplication application, DocumentType documentType) {
 
         Set<DocumentType> allowedDocuments = VerificationDocumentRequirement.getRequiredDocuments(application.getApplicantType());
 
@@ -59,8 +56,7 @@ public class VerificationApplicationValidationService {
         }
     }
 
-    public void validateApplicationCanBeSubmitted(
-            VerificationApplication application) {
+    public void validateApplicationCanBeSubmitted(VerificationApplication application) {
 
         if (application.getStatus() != VerificationStatus.PENDING) {
 
