@@ -25,3 +25,16 @@ replay_pid*
 
 .idea/
 *.iml
+
+# Python
+ocr-service/.venv/
+ocr-service/__pycache__/
+ocr-service/**/*.pyc
+
+# OCR test files
+backend/ocr-service/test-document.jpg
+backend/ocr-service/test-image.png
+
+# Python cache
+__pycache__/
+*.py[cod]
