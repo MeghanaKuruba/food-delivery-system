@@ -1,108 +1,53 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from paddleocr import PaddleOCR
-import re
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from ocr.engine import OcrEngine
+from ocr.extractor import extract_fields
+
 import tempfile
 import os
 
 
 app = FastAPI(
-    title="OCR Service",
-    description="Document OCR service for the food delivery verification system",
+    title="Food Delivery OCR Service",
+    description="Document OCR service for verification",
     version="1.0.0"
 )
 
 
-ocr = PaddleOCR(
-    lang="en",
-    use_doc_orientation_classify=False,
-    use_doc_unwarping=False,
-    use_textline_orientation=False
-)
+ocr_engine = OcrEngine()
 
 
-def run_ocr(image_path):
-    result = ocr.predict(image_path)
-
-    texts = []
-
-    for res in result:
-        for text, score in zip(res["rec_texts"], res["rec_scores"]):
-            text = text.strip()
-
-            if text:
-                texts.append({
-                    "text": text,
-                    "confidence": float(score)
-                })
-
-    return texts
-
-
-def extract_pan_fields(texts):
-    pan_number = None
-    name = None
-    father_name = None
-    date_of_birth = None
-
-    pan_pattern = re.compile(
-        r"\b[A-Z]{5}[0-9]{4}[A-Z]\b"
-    )
-
-    dob_pattern = re.compile(
-        r"\b\d{2}/\d{2}/\d{4}\b"
-    )
-
-    for index, item in enumerate(texts):
-
-        text = item["text"]
-        upper_text = text.upper()
-
-        # PAN number
-        pan_match = pan_pattern.search(upper_text)
-
-        if pan_match:
-            pan_number = pan_match.group()
-
-        # Date of birth
-        dob_match = dob_pattern.search(text)
-
-        if dob_match:
-            date_of_birth = dob_match.group()
-
-        # Name
-        if "NAME" in upper_text and "FATHER" not in upper_text:
-            if index + 1 < len(texts):
-                name = texts[index + 1]["text"]
-
-        # Father's name
-        if "FATHER'S NAME" in upper_text:
-            if index + 1 < len(texts):
-                father_name = texts[index + 1]["text"]
-
-    return {
-        "documentType": "PAN",
-        "panNumber": pan_number,
-        "name": name,
-        "fatherName": father_name,
-        "dateOfBirth": date_of_birth
-    }
+SUPPORTED_DOCUMENT_TYPES = {
+    "PAN",
+    "GST",
+    "FSSAI",
+    "BUSINESS_REGISTRATION",
+    "DRIVING_LICENSE",
+    "RC",
+    "INSURANCE"
+}
 
 
 @app.get("/health")
 def health_check():
+
     return {
         "status": "UP",
         "service": "ocr-service"
     }
 
 
-@app.post("/api/v1/ocr/pan")
-async def extract_pan(file: UploadFile = File(...)):
+@app.post("/api/v1/ocr/extract")
+async def extract_document(
+        document_type: str = Form(...),
+        file: UploadFile = File(...)
+):
 
-    if not file.filename:
+    document_type = document_type.upper()
+
+    if document_type not in SUPPORTED_DOCUMENT_TYPES:
         raise HTTPException(
             status_code=400,
-            detail="File name is required"
+            detail=f"Unsupported document type: {document_type}"
         )
 
     allowed_types = {
@@ -128,25 +73,39 @@ async def extract_pan(file: UploadFile = File(...)):
     temp_path = None
 
     try:
+
+        suffix = os.path.splitext(file.filename)[1]
+
         with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=os.path.splitext(file.filename)[1]
+                delete=False,
+                suffix=suffix
         ) as temp_file:
 
             temp_file.write(file_bytes)
             temp_path = temp_file.name
 
-        texts = run_ocr(temp_path)
+        texts = ocr_engine.extract_text(temp_path)
 
-        extracted_data = extract_pan_fields(texts)
+        extracted_fields = extract_fields(
+            document_type,
+            texts
+        )
 
         return {
             "success": True,
-            "documentType": "PAN",
-            "data": extracted_data,
+            "documentType": document_type,
+            "data": extracted_fields,
             "ocrText": texts
         }
 
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
     finally:
+
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
