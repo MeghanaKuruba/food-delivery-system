@@ -18,10 +18,12 @@ class OcrEngine:
         texts = []
 
         for res in result:
+
             for text, score in zip(
                     res["rec_texts"],
                     res["rec_scores"]
             ):
+
                 text = text.strip()
 
                 if text:

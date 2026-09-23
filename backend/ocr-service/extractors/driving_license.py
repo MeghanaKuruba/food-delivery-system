@@ -11,6 +11,23 @@ DL_PATTERN = re.compile(
 )
 
 
+def get_value(texts, index):
+
+    text = texts[index]["text"].strip()
+
+    if ":" in text:
+
+        value = text.split(":", 1)[1].strip()
+
+        if value:
+            return value
+
+    if index + 1 < len(texts):
+        return texts[index + 1]["text"].strip()
+
+    return None
+
+
 def extract(texts):
 
     dl_number = None
@@ -21,52 +38,78 @@ def extract(texts):
     valid_to = None
     vehicle_classes = []
 
-    for item in texts:
+    for index, item in enumerate(texts):
 
         text = item["text"].strip()
         upper_text = text.upper()
 
-        # DL number
-        if "DL NO" in upper_text:
-            match = DL_PATTERN.search(text)
+        match = DL_PATTERN.search(text)
 
-            if match:
-                dl_number = match.group()
+        if match:
+            dl_number = match.group()
 
-        # Name
-        if upper_text.startswith("NAME:"):
-            name = text.split(":", 1)[1].strip()
+        if "NAME" in upper_text and "DL NO" not in upper_text:
+            name = get_value(texts, index)
 
-        # Date of birth
-        if "D.O.B." in upper_text or "DOB" in upper_text:
+        if "D.O.B" in upper_text or "DOB" in upper_text:
 
             match = DATE_PATTERN.search(text)
 
             if match:
                 date_of_birth = match.group()
 
-        # Address
-        if upper_text.startswith("ADDRESS:"):
-            address = text.split(":", 1)[1].strip()
+            elif index + 1 < len(texts):
 
-        # Issue date
-        if "DATE OF ISSUE:" in upper_text:
+                next_text = texts[index + 1]["text"]
+
+                match = DATE_PATTERN.search(next_text)
+
+                if match:
+                    date_of_birth = match.group()
+
+        if upper_text.startswith("ADDRESS"):
+
+            address = get_value(texts, index)
+
+        if "DATE OF ISSUE" in upper_text:
 
             match = DATE_PATTERN.search(text)
 
             if match:
                 valid_from = match.group()
 
-        # Valid till
-        if "VALID TILL:" in upper_text:
+            elif index + 1 < len(texts):
+
+                match = DATE_PATTERN.search(
+                    texts[index + 1]["text"]
+                )
+
+                if match:
+                    valid_from = match.group()
+
+        if "VALID TILL" in upper_text:
 
             match = DATE_PATTERN.search(text)
 
             if match:
                 valid_to = match.group()
 
-        # Vehicle category
-        if upper_text in {"LMV", "MCWG", "MCWOG", "HMV", "HGV"}:
+            elif index + 1 < len(texts):
+
+                match = DATE_PATTERN.search(
+                    texts[index + 1]["text"]
+                )
+
+                if match:
+                    valid_to = match.group()
+
+        if upper_text in {
+            "LMV",
+            "MCWG",
+            "MCWOG",
+            "HMV",
+            "HGV"
+        }:
             vehicle_classes.append(text)
 
     return {

@@ -7,34 +7,73 @@ def extract(texts):
     date_of_registration = None
     valid_to = None
 
-    for item in texts:
+    for index, item in enumerate(texts):
 
         text = item["text"].strip()
         upper_text = text.upper()
 
-        if upper_text.startswith("REGISTRATION NUMBER:"):
+        # Registration number
+        if "REGISTRATION NUMBER:" in upper_text:
 
-            registration_number = text.split(":", 1)[1].strip()
+            value = text.split(":", 1)[1].strip()
 
-        elif upper_text.startswith("1. NAME OF ESTABLISHMENT:"):
+            if value:
+                registration_number = value
 
-            business_name = text.split(":", 1)[1].strip()
+        # Name of establishment
+        elif "NAME OF ESTABLISHMENT:" in upper_text:
 
-        elif upper_text.startswith("2. NAME OF PROPRIETOR:"):
+            value = text.split(":", 1)[1].strip()
 
-            proprietor_name = text.split(":", 1)[1].strip()
+            if value:
+                business_name = value
 
-        elif upper_text.startswith("3. ADDRESS:"):
+            elif index + 1 < len(texts):
+                business_name = texts[index + 1]["text"].strip()
 
-            address = text.split(":", 1)[1].strip()
+        # Proprietor
+        elif "NAME OF PROPRIETOR:" in upper_text:
 
-        elif "10. DATE OF REGISTRATION:" in upper_text:
+            value = text.split(":", 1)[1].strip()
 
-            date_of_registration = text.split(":", 1)[1].strip()
+            if value:
+                proprietor_name = value
 
-        elif "11. VALID UP TO:" in upper_text:
+            elif index + 1 < len(texts):
+                proprietor_name = texts[index + 1]["text"].strip()
 
-            valid_to = text.split(":", 1)[1].strip()
+        # Address
+        elif upper_text.startswith("3. ADDRESS"):
+
+            value = text.split(":", 1)[1].strip()
+
+            if value:
+                address = value
+
+            elif index + 1 < len(texts):
+                address = texts[index + 1]["text"].strip()
+
+        # Date of registration
+        elif "DATE OF REGISTRATION:" in upper_text:
+
+            value = text.split(":", 1)[1].strip()
+
+            if value:
+                date_of_registration = value
+
+            elif index + 1 < len(texts):
+                date_of_registration = texts[index + 1]["text"].strip()
+
+        # Valid up to
+        elif "VALID UP TO:" in upper_text:
+
+            value = text.split(":", 1)[1].strip()
+
+            if value:
+                valid_to = value
+
+            elif index + 1 < len(texts):
+                valid_to = texts[index + 1]["text"].strip()
 
     return {
         "registrationNumber": registration_number,

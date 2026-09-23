@@ -1,3 +1,29 @@
+import re
+
+
+REGISTRATION_PATTERN = re.compile(
+    r"\b[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{1,4}\b",
+    re.IGNORECASE
+)
+
+
+def get_value(texts, index):
+
+    text = texts[index]["text"].strip()
+
+    if ":" in text:
+
+        value = text.split(":", 1)[1].strip()
+
+        if value:
+            return value
+
+    if index + 1 < len(texts):
+        return texts[index + 1]["text"].strip()
+
+    return None
+
+
 def extract(texts):
 
     registration_number = None
@@ -9,46 +35,40 @@ def extract(texts):
     chassis_number = None
     engine_number = None
 
-    for item in texts:
+    for index, item in enumerate(texts):
 
         text = item["text"].strip()
         upper_text = text.upper()
 
-        if upper_text.startswith("OWNER'S NAME:"):
+        # Registration number
+        registration_match = REGISTRATION_PATTERN.search(text)
 
-            owner_name = text.split(":", 1)[1].strip()
+        if registration_match and registration_number is None:
+            registration_number = registration_match.group().upper()
 
-        elif upper_text.startswith("MAKE / MODEL:"):
+        # Owner
+        if "OWNER'S NAME" in upper_text:
+            owner_name = get_value(texts, index)
 
-            model = text.split(":", 1)[1].strip()
+        # Make / Model
+        elif "MAKE / MODEL" in upper_text:
+            model = get_value(texts, index)
 
-        elif upper_text.startswith("FUEL TYPE:"):
+        # Fuel
+        elif "FUEL TYPE" in upper_text:
+            fuel_type = get_value(texts, index)
 
-            fuel_type = text.split(":", 1)[1].strip()
+        # Engine
+        elif "ENGINE NO" in upper_text:
+            engine_number = get_value(texts, index)
 
-        elif upper_text.startswith("ENGINE NO.:"):
+        # Chassis
+        elif "CHASSIS NO" in upper_text:
+            chassis_number = get_value(texts, index)
 
-            engine_number = text.split(":", 1)[1].strip()
-
-        elif upper_text.startswith("CHASSIS NO.:"):
-
-            chassis_number = text.split(":", 1)[1].strip()
-
-        elif upper_text.startswith("CLASS OF VEHICLE:"):
-
-            vehicle_class = text.split(":", 1)[1].strip()
-
-        # Registration number is usually a standalone value
-        elif (
-                len(text.replace(" ", "")) >= 8
-                and upper_text.replace(" ", "").isalnum()
-        ):
-
-            if (
-                    registration_number is None
-                    and upper_text.replace(" ", "").startswith(("KA", "MH", "DL"))
-            ):
-                registration_number = text
+        # Vehicle class
+        elif "CLASS OF VEHICLE" in upper_text:
+            vehicle_class = get_value(texts, index)
 
     return {
         "registrationNumber": registration_number,
