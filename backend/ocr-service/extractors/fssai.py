@@ -10,6 +10,23 @@ DATE_PATTERN = re.compile(
 )
 
 
+def get_value(texts, index):
+
+    text = texts[index]["text"].strip()
+
+    if ":" in text:
+
+        value = text.split(":", 1)[1].strip()
+
+        if value:
+            return value
+
+    if index + 1 < len(texts):
+        return texts[index + 1]["text"].strip()
+
+    return None
+
+
 def extract(texts):
 
     license_number = None
@@ -20,12 +37,11 @@ def extract(texts):
     valid_from = None
     valid_to = None
 
-    for item in texts:
+    for index, item in enumerate(texts):
 
         text = item["text"].strip()
         upper_text = text.upper()
 
-        # License number
         if "LICENSE NO." in upper_text:
 
             match = LICENSE_PATTERN.search(text)
@@ -33,29 +49,36 @@ def extract(texts):
             if match:
                 license_number = match.group()
 
-        # Business name
-        elif "NAME OF LICENSEE:" in upper_text:
+        elif "NAME OF LICENSEE" in upper_text:
 
-            business_name = text.split(":", 1)[1].strip()
+            business_name = get_value(texts, index)
 
-        # Address
-        elif upper_text.startswith("ADDRESS:"):
+        elif upper_text.startswith("ADDRESS"):
 
-            premises_address = text.split(":", 1)[1].strip()
+            premises_address = get_value(texts, index)
 
-        # Kind of business
-        elif "KIND OF BUSINESS:" in upper_text:
+        elif "KIND OF BUSINESS" in upper_text:
 
-            kind_of_business = text.split(":", 1)[1].strip()
+            kind_of_business = get_value(texts, index)
 
-        # Validity
-        elif "LICENSE VALIDITY:" in upper_text:
+        elif "LICENSE VALIDITY" in upper_text:
 
             dates = DATE_PATTERN.findall(text)
 
             if len(dates) >= 2:
+
                 valid_from = dates[0]
                 valid_to = dates[1]
+
+            elif index + 1 < len(texts):
+
+                dates = DATE_PATTERN.findall(
+                    texts[index + 1]["text"]
+                )
+
+                if len(dates) >= 2:
+                    valid_from = dates[0]
+                    valid_to = dates[1]
 
     return {
         "licenseNumber": license_number,

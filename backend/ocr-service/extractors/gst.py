@@ -6,6 +6,23 @@ GST_PATTERN = re.compile(
 )
 
 
+def get_value(texts, index):
+
+    text = texts[index]["text"].strip()
+
+    if ":" in text:
+
+        value = text.split(":", 1)[1].strip()
+
+        if value:
+            return value
+
+    if index + 1 < len(texts):
+        return texts[index + 1]["text"].strip()
+
+    return None
+
+
 def extract(texts):
 
     gst_number = None
@@ -15,37 +32,37 @@ def extract(texts):
 
     collecting_address = False
 
-    for item in texts:
+    for index, item in enumerate(texts):
 
         text = item["text"].strip()
         upper_text = text.upper()
 
-        # GSTIN
         match = GST_PATTERN.search(upper_text)
 
         if match:
             gst_number = match.group()
 
-        # Legal name
-        if "LEGAL NAME:" in upper_text:
+        if "LEGAL NAME" in upper_text:
 
-            if ":" in text:
-                legal_name = text.split(":", 1)[1].strip()
+            legal_name = get_value(texts, index)
 
-        # Trade name
-        elif "TRADE NAME:" in upper_text:
+        elif "TRADE NAME" in upper_text:
 
-            if ":" in text:
-                trade_name = text.split(":", 1)[1].strip()
+            trade_name = get_value(texts, index)
 
-        # Address starts
-        if "ADDRESS OF" in upper_text:
+        elif "ADDRESS OF" in upper_text:
 
             collecting_address = True
+
+            if ":" in text:
+                value = text.split(":", 1)[1].strip()
+
+                if value:
+                    business_address_parts.append(value)
+
             continue
 
-        # Address continues
-        if collecting_address:
+        elif collecting_address:
 
             if (
                     "DATE OF LIABILITY" in upper_text

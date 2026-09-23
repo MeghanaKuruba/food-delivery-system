@@ -37,13 +37,23 @@ def extract(texts):
         # Name
         if "NAME" in upper_text and "FATHER" not in upper_text:
 
-            if index + 1 < len(texts):
+            value = text.split(":", 1)[1].strip() if ":" in text else ""
+
+            if value:
+                name = value
+
+            elif index + 1 < len(texts):
                 name = texts[index + 1]["text"].strip()
 
         # Father's name
         if "FATHER" in upper_text and "NAME" in upper_text:
 
-            if index + 1 < len(texts):
+            value = text.split(":", 1)[1].strip() if ":" in text else ""
+
+            if value:
+                father_name = value
+
+            elif index + 1 < len(texts):
                 father_name = texts[index + 1]["text"].strip()
 
     return {

@@ -74,7 +74,9 @@ async def extract_document(
 
     try:
 
-        suffix = os.path.splitext(file.filename)[1]
+        suffix = os.path.splitext(
+            file.filename
+        )[1]
 
         with tempfile.NamedTemporaryFile(
                 delete=False,

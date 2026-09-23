@@ -6,6 +6,23 @@ DATE_PATTERN = re.compile(
 )
 
 
+def get_value(texts, index):
+
+    text = texts[index]["text"].strip()
+
+    if ":" in text:
+
+        value = text.split(":", 1)[1].strip()
+
+        if value:
+            return value
+
+    if index + 1 < len(texts):
+        return texts[index + 1]["text"].strip()
+
+    return None
+
+
 def extract(texts):
 
     policy_number = None
@@ -20,15 +37,10 @@ def extract(texts):
         text = item["text"].strip()
         upper_text = text.upper()
 
-        # Policy number
-        if "POLICY NUMBER:" in upper_text:
+        if "POLICY NUMBER" in upper_text:
 
-            value = text.split(":", 1)[1].strip()
+            policy_number = get_value(texts, index)
 
-            if value:
-                policy_number = value
-
-        # Policy period
         elif "FROM:" in upper_text:
 
             match = DATE_PATTERN.search(text)
@@ -43,22 +55,20 @@ def extract(texts):
             if match:
                 valid_to = match.group()
 
-        # Insured name
-        elif "INSURED'S NAME:" in upper_text:
+        elif "INSURED'S NAME" in upper_text:
 
-            insured_name = text.split(":", 1)[1].strip()
+            insured_name = get_value(texts, index)
 
-        # Vehicle registration
-        elif "VEHICLE REGISTRATION NO.:" in upper_text:
+        elif "VEHICLE REGISTRATION NO" in upper_text:
 
-            vehicle_registration_number = (
-                text.split(":", 1)[1].strip()
+            vehicle_registration_number = get_value(
+                texts,
+                index
             )
 
-        # Insurer
-        elif "INSURANCE COMPANY:" in upper_text:
+        elif "INSURANCE COMPANY" in upper_text:
 
-            insurer_name = text.split(":", 1)[1].strip()
+            insurer_name = get_value(texts, index)
 
     return {
         "policyNumber": policy_number,
