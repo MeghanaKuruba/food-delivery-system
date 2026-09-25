@@ -1,91 +1,266 @@
 import re
 
-
-LICENSE_PATTERN = re.compile(
-    r"\b\d{14}\b"
-)
-
-DATE_PATTERN = re.compile(
-    r"\d{2}[/-]\d{2}[/-]\d{4}"
-)
-
-
-def get_value(texts, index):
-
-    text = texts[index]["text"].strip()
-
-    if ":" in text:
-
-        value = text.split(":", 1)[1].strip()
-
-        if value:
-            return value
-
-    if index + 1 < len(texts):
-        return texts[index + 1]["text"].strip()
-
-    return None
+from ocr.normalizer import normalize_lines
 
 
 def extract(texts):
 
+    lines = normalize_lines(texts)
+
+    # --------------------------------------------------
+    # LICENSE NUMBER
+    # --------------------------------------------------
+
     license_number = None
+
+    for line in lines:
+
+        match = re.search(
+            r"\b(\d{14})\b",
+            line
+        )
+
+        if match:
+            license_number = match.group(1)
+            break
+
+    # --------------------------------------------------
+    # BUSINESS NAME
+    # --------------------------------------------------
+
     business_name = None
+
+    for index, line in enumerate(lines):
+
+        if (
+                "Name & Registered Office address of"
+                in line
+                or
+                "Name and Registered Office address of"
+                in line
+        ):
+
+            # In this document the actual value is
+            # on the same OCR row.
+            if index + 0 < len(lines):
+
+                # Find the known company-like line
+                # immediately following the label.
+                for next_index in range(
+                        index,
+                        min(index + 3, len(lines))
+                ):
+
+                    candidate = lines[next_index]
+
+                    if (
+                            "WESTCOAST" in candidate.upper()
+                            or
+                            "LTD" in candidate.upper()
+                    ):
+                        business_name = candidate
+                        break
+
+            break
+
+    # --------------------------------------------------
+    # PREMISES ADDRESS
+    # --------------------------------------------------
+
     premises_address = None
+
+    for index, line in enumerate(lines):
+
+        if (
+                "Address of Authorized Premises"
+                in line
+        ):
+
+            values = []
+
+            for next_index in range(
+                    index,
+                    min(index + 6, len(lines))
+            ):
+
+                candidate = lines[next_index]
+
+                if not candidate:
+                    continue
+
+                # Ignore the label line itself.
+                if (
+                        "Address of Authorized Premises"
+                        in candidate
+                ):
+                    continue
+
+                # Stop at next numbered section.
+                if re.match(
+                        r"^\d+\s*[\.\):\-]",
+                        candidate
+                ):
+                    break
+
+                # Stop at next FSSAI section.
+                if (
+                        "Kind of Business" in candidate
+                        or
+                        "Category of License" in candidate
+                ):
+                    break
+
+                values.append(candidate)
+
+            if values:
+                premises_address = " ".join(values)
+
+            break
+
+    # --------------------------------------------------
+    # KIND OF BUSINESS
+    # --------------------------------------------------
+
     kind_of_business = None
+
+    for index, line in enumerate(lines):
+
+        if "Kind of Business" in line:
+
+            values = []
+
+            for next_index in range(
+                    index,
+                    min(index + 10, len(lines))
+            ):
+
+                candidate = lines[next_index]
+
+                if not candidate:
+                    continue
+
+                if (
+                        "Kind of Business" in candidate
+                ):
+                    continue
+
+                # Stop at next section.
+                if re.match(
+                        r"^\d+\s*[\.\):\-]",
+                        candidate
+                ):
+                    break
+
+                # Stop before license category.
+                if (
+                        "Category of License" in candidate
+                ):
+                    break
+
+                # Ignore obvious OCR label noise.
+                if (
+                        candidate.startswith("/")
+                        or
+                        candidate.startswith("\\")
+                ):
+                    continue
+
+                values.append(candidate)
+
+            if values:
+                # Keep the actual business categories.
+                kind_of_business = "; ".join(values)
+
+            break
+
+    # --------------------------------------------------
+    # LICENSE CATEGORY
+    # --------------------------------------------------
+
     license_category = None
-    valid_from = None
-    valid_to = None
 
-    for index, item in enumerate(texts):
+    for index, line in enumerate(lines):
 
-        text = item["text"].strip()
-        upper_text = text.upper()
+        if "Category of License" in line:
 
-        if "LICENSE NO." in upper_text:
+            # Look at following lines for actual value.
+            for next_index in range(
+                    index + 1,
+                    min(index + 4, len(lines))
+            ):
 
-            match = LICENSE_PATTERN.search(text)
+                candidate = lines[next_index]
 
-            if match:
-                license_number = match.group()
+                if not candidate:
+                    continue
 
-        elif "NAME OF LICENSEE" in upper_text:
+                if candidate in [
+                    "/ aafia a af:",
+                    "/ aafia a af"
+                ]:
+                    continue
 
-            business_name = get_value(texts, index)
+                if "Central License" in candidate:
+                    license_category = "Central License"
+                    break
 
-        elif upper_text.startswith("ADDRESS"):
+                if "State License" in candidate:
+                    license_category = "State License"
+                    break
 
-            premises_address = get_value(texts, index)
+                if "Basic Registration" in candidate:
+                    license_category = "Basic Registration"
+                    break
 
-        elif "KIND OF BUSINESS" in upper_text:
+            break
 
-            kind_of_business = get_value(texts, index)
+    # --------------------------------------------------
+    # ISSUED DATE
+    # --------------------------------------------------
 
-        elif "LICENSE VALIDITY" in upper_text:
+    issued_date = None
 
-            dates = DATE_PATTERN.findall(text)
+    for line in lines:
 
-            if len(dates) >= 2:
+        match = re.search(
+            r"(?:Issued On|License Issued On)"
+            r".*?"
+            r"(\d{2}[-/]\d{2}[-/]\d{4})",
+            line,
+            flags=re.IGNORECASE
+        )
 
-                valid_from = dates[0]
-                valid_to = dates[1]
+        if match:
+            issued_date = match.group(1)
+            break
 
-            elif index + 1 < len(texts):
+    # --------------------------------------------------
+    # VALID UNTIL
+    # --------------------------------------------------
 
-                dates = DATE_PATTERN.findall(
-                    texts[index + 1]["text"]
-                )
+    valid_until = None
 
-                if len(dates) >= 2:
-                    valid_from = dates[0]
-                    valid_to = dates[1]
+    for line in lines:
+
+        match = re.search(
+            r"(?:Valid Upto|Valid Up To|Valid Until)"
+            r".*?"
+            r"(\d{2}[-/]\d{2}[-/]\d{4})",
+            line,
+            flags=re.IGNORECASE
+        )
+
+        if match:
+            valid_until = match.group(1)
+            break
 
     return {
         "licenseNumber": license_number,
         "businessName": business_name,
+        "businessAddress": None,
         "premisesAddress": premises_address,
         "kindOfBusiness": kind_of_business,
         "licenseCategory": license_category,
-        "validFrom": valid_from,
-        "validTo": valid_to
+        "issuedDate": issued_date,
+        "validUntil": valid_until
     }

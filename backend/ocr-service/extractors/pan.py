@@ -1,60 +1,55 @@
 import re
 
-
-PAN_PATTERN = re.compile(
-    r"\b[A-Z]{5}[0-9]{4}[A-Z]\b"
-)
-
-DATE_PATTERN = re.compile(
-    r"\b\d{2}[/-]\d{2}[/-]\d{4}\b"
+from ocr.normalizer import (
+    normalize_lines,
+    value_after_label
 )
 
 
 def extract(texts):
 
+    lines = normalize_lines(texts)
+
     pan_number = None
-    name = None
-    father_name = None
-    date_of_birth = None
 
-    for index, item in enumerate(texts):
+    # Standard PAN pattern
+    for line in lines:
 
-        text = item["text"].strip()
-        upper_text = text.upper()
+        match = re.search(
+            r"\b([A-Z]{5}[0-9]{4}[A-Z])\b",
+            line.upper()
+        )
 
-        # PAN number
-        pan_match = PAN_PATTERN.search(upper_text)
+        if match:
+            pan_number = match.group(1)
+            break
 
-        if pan_match:
-            pan_number = pan_match.group()
+    name = value_after_label(
+        lines,
+        [
+            "Name",
+            "/Name"
+        ]
+    )
 
-        # Date of birth
-        date_match = DATE_PATTERN.search(text)
+    father_name = value_after_label(
+        lines,
+        [
+            "Father's Name",
+            "Father Name",
+            "/Father's Name"
+        ]
+    )
 
-        if date_match:
-            date_of_birth = date_match.group()
-
-        # Name
-        if "NAME" in upper_text and "FATHER" not in upper_text:
-
-            value = text.split(":", 1)[1].strip() if ":" in text else ""
-
-            if value:
-                name = value
-
-            elif index + 1 < len(texts):
-                name = texts[index + 1]["text"].strip()
-
-        # Father's name
-        if "FATHER" in upper_text and "NAME" in upper_text:
-
-            value = text.split(":", 1)[1].strip() if ":" in text else ""
-
-            if value:
-                father_name = value
-
-            elif index + 1 < len(texts):
-                father_name = texts[index + 1]["text"].strip()
+    date_of_birth = value_after_label(
+        lines,
+        [
+            "Date of Birth",
+            "Date Of Birth",
+            "DOB",
+            "/Date of Birth"
+        ]
+    )
 
     return {
         "panNumber": pan_number,

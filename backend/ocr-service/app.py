@@ -1,4 +1,11 @@
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import (
+    FastAPI,
+    File,
+    UploadFile,
+    Form,
+    HTTPException
+)
+
 from ocr.engine import OcrEngine
 from ocr.extractor import extract_fields
 
@@ -20,10 +27,16 @@ SUPPORTED_DOCUMENT_TYPES = {
     "PAN",
     "GST",
     "FSSAI",
-    "BUSINESS_REGISTRATION",
     "DRIVING_LICENSE",
     "RC",
     "INSURANCE"
+}
+
+
+ALLOWED_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/jpg"
 }
 
 
@@ -42,21 +55,22 @@ async def extract_document(
         file: UploadFile = File(...)
 ):
 
-    document_type = document_type.upper()
+    document_type = document_type.upper().strip()
 
     if document_type not in SUPPORTED_DOCUMENT_TYPES:
+
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported document type: {document_type}"
+            detail=(
+                f"Unsupported document type: "
+                f"{document_type}. "
+                f"Supported types: "
+                f"{sorted(SUPPORTED_DOCUMENT_TYPES)}"
+            )
         )
 
-    allowed_types = {
-        "image/jpeg",
-        "image/png",
-        "image/jpg"
-    }
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
 
-    if file.content_type not in allowed_types:
         raise HTTPException(
             status_code=400,
             detail="Only JPG and PNG images are supported"
@@ -65,6 +79,7 @@ async def extract_document(
     file_bytes = await file.read()
 
     if not file_bytes:
+
         raise HTTPException(
             status_code=400,
             detail="Uploaded file is empty"
@@ -75,8 +90,11 @@ async def extract_document(
     try:
 
         suffix = os.path.splitext(
-            file.filename
+            file.filename or ".png"
         )[1]
+
+        if not suffix:
+            suffix = ".png"
 
         with tempfile.NamedTemporaryFile(
                 delete=False,
@@ -86,7 +104,9 @@ async def extract_document(
             temp_file.write(file_bytes)
             temp_path = temp_file.name
 
-        texts = ocr_engine.extract_text(temp_path)
+        texts = ocr_engine.extract_text(
+            temp_path
+        )
 
         extracted_fields = extract_fields(
             document_type,
@@ -107,7 +127,17 @@ async def extract_document(
             detail=str(error)
         )
 
+    except Exception as error:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"OCR processing failed: {str(error)}"
+        )
+
     finally:
 
-        if temp_path and os.path.exists(temp_path):
+        if (
+                temp_path
+                and os.path.exists(temp_path)
+        ):
             os.remove(temp_path)

@@ -1,116 +1,226 @@
 import re
 
-
-DATE_PATTERN = re.compile(
-    r"\b\d{2}[-/]\d{2}[-/]\d{4}\b"
-)
-
-DL_PATTERN = re.compile(
-    r"\b[A-Z]{2}\d{2}\s*\d{4}\s*\d{7}\b",
-    re.IGNORECASE
+from ocr.normalizer import (
+    normalize_lines,
+    value_after_label,
+    multiline_value_after_label,
+    clean_identifier
 )
 
 
-def get_value(texts, index):
-
-    text = texts[index]["text"].strip()
-
-    if ":" in text:
-
-        value = text.split(":", 1)[1].strip()
-
-        if value:
-            return value
-
-    if index + 1 < len(texts):
-        return texts[index + 1]["text"].strip()
-
-    return None
+DATE_PATTERN = (
+    r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"
+)
 
 
 def extract(texts):
 
+    lines = normalize_lines(texts)
+
+    # --------------------------------------------------
+    # DL NUMBER
+    # --------------------------------------------------
+
     dl_number = None
-    name = None
+
+    for line in lines:
+
+        # Indian DL examples:
+        # DL-0420110149646
+        # DL0420110149646
+
+        matches = re.findall(
+            r"\b(DL[- ]?[A-Z0-9]{8,20})\b",
+            line.upper()
+        )
+
+        for candidate in matches:
+
+            candidate = candidate.replace(
+                " ",
+                ""
+            )
+
+            if candidate.startswith("DL"):
+
+                dl_number = candidate
+                break
+
+        if dl_number:
+            break
+
+    # --------------------------------------------------
+    # NAME
+    # --------------------------------------------------
+
+    name = value_after_label(
+        lines,
+        [
+            "Name"
+        ]
+    )
+
+    # --------------------------------------------------
+    # DATE OF BIRTH
+    # --------------------------------------------------
+
     date_of_birth = None
-    address = None
-    valid_from = None
-    valid_to = None
-    vehicle_classes = []
 
-    for index, item in enumerate(texts):
+    for line in lines:
 
-        text = item["text"].strip()
-        upper_text = text.upper()
-
-        match = DL_PATTERN.search(text)
+        match = re.search(
+            r"(?:DOB|Date of Birth)"
+            r"\s*[:\-]?\s*"
+            + DATE_PATTERN,
+            line,
+            flags=re.IGNORECASE
+        )
 
         if match:
-            dl_number = match.group()
+            date_of_birth = re.search(
+                DATE_PATTERN,
+                match.group(0)
+            ).group(0)
 
-        if "NAME" in upper_text and "DL NO" not in upper_text:
-            name = get_value(texts, index)
+            break
 
-        if "D.O.B" in upper_text or "DOB" in upper_text:
+    # --------------------------------------------------
+    # ADDRESS
+    # --------------------------------------------------
 
-            match = DATE_PATTERN.search(text)
+    address = multiline_value_after_label(
+        lines,
+        [
+            "Address"
+        ],
+        [
+            "Authorisation to Drive",
+            "Date of Issue",
+            "Issue Date",
+            "Validity",
+            "Valid Upto",
+            "Valid Up To",
+            "Issuing Authority"
+        ],
+        max_lines=5
+    )
+
+    # --------------------------------------------------
+    # VALID FROM
+    # --------------------------------------------------
+
+    valid_from = None
+
+    # Prefer explicit Issue Date lines.
+    for line in lines:
+
+        if (
+                "date of issue" in line.lower()
+                or line.lower().startswith("issue date")
+        ):
+
+            match = re.search(
+                DATE_PATTERN,
+                line
+            )
 
             if match:
-                date_of_birth = match.group()
+                valid_from = match.group(0)
+                break
 
-            elif index + 1 < len(texts):
+    # If date is in a separate OCR line, find dates
+    # near the lower document section.
+    if not valid_from:
 
-                next_text = texts[index + 1]["text"]
+        date_candidates = []
 
-                match = DATE_PATTERN.search(next_text)
+        for line in lines:
 
-                if match:
-                    date_of_birth = match.group()
+            matches = re.findall(
+                DATE_PATTERN,
+                line
+            )
 
-        if upper_text.startswith("ADDRESS"):
+            date_candidates.extend(matches)
 
-            address = get_value(texts, index)
+        # In this document:
+        # 09/02/1976 = DOB
+        # 01/03/2011 = issue date
+        # 08/02/2026 = validity
+        if len(date_candidates) >= 2:
 
-        if "DATE OF ISSUE" in upper_text:
+            for candidate in date_candidates[1:]:
 
-            match = DATE_PATTERN.search(text)
+                if candidate != date_of_birth:
+                    valid_from = candidate
+                    break
+
+    # --------------------------------------------------
+    # VALID TO
+    # --------------------------------------------------
+
+    valid_to = None
+
+    for line in lines:
+
+        if (
+                "validity" in line.lower()
+                or "valid upto" in line.lower()
+                or "valid up to" in line.lower()
+                or "valid till" in line.lower()
+        ):
+
+            match = re.search(
+                DATE_PATTERN,
+                line
+            )
 
             if match:
-                valid_from = match.group()
+                valid_to = match.group(0)
+                break
 
-            elif index + 1 < len(texts):
+    # --------------------------------------------------
+    # VEHICLE CLASSES
+    # --------------------------------------------------
 
-                match = DATE_PATTERN.search(
-                    texts[index + 1]["text"]
-                )
+    vehicle_classes = []
 
-                if match:
-                    valid_from = match.group()
+    class_patterns = [
+        r"\bMCWG\b",
+        r"\bMCWOG\b",
+        r"\bLMV\b",
+        r"\bHMV\b",
+        r"\bHGV\b",
+        r"\bMGV\b",
+        r"\bTransport\b"
+    ]
 
-        if "VALID TILL" in upper_text:
+    for line in lines:
 
-            match = DATE_PATTERN.search(text)
+        upper_line = line.upper()
+
+        # Don't treat government/department headers
+        # as vehicle classes.
+        if (
+                "DEPARTMENT" in upper_line
+                or "GOVERNMENT OF" in upper_line
+                or "LICENCE TO DRIVE" in upper_line
+        ):
+            continue
+
+        for pattern in class_patterns:
+
+            match = re.search(
+                pattern,
+                upper_line
+            )
 
             if match:
-                valid_to = match.group()
 
-            elif index + 1 < len(texts):
+                value = match.group(0)
 
-                match = DATE_PATTERN.search(
-                    texts[index + 1]["text"]
-                )
-
-                if match:
-                    valid_to = match.group()
-
-        if upper_text in {
-            "LMV",
-            "MCWG",
-            "MCWOG",
-            "HMV",
-            "HGV"
-        }:
-            vehicle_classes.append(text)
+                if value not in vehicle_classes:
+                    vehicle_classes.append(value)
 
     return {
         "dlNumber": dl_number,

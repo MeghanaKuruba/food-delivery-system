@@ -12,24 +12,57 @@ class OcrEngine:
         )
 
     def extract_text(self, image_path):
-
         result = self.ocr.predict(image_path)
 
         texts = []
 
         for res in result:
 
-            for text, score in zip(
-                    res["rec_texts"],
-                    res["rec_scores"]
-            ):
+            try:
+                rec_texts = res["rec_texts"]
+            except Exception:
+                rec_texts = []
 
-                text = text.strip()
+            try:
+                rec_scores = res["rec_scores"]
+            except Exception:
+                rec_scores = []
 
-                if text:
-                    texts.append({
-                        "text": text,
-                        "confidence": float(score)
-                    })
+            try:
+                rec_boxes = res["rec_boxes"]
+            except Exception:
+                rec_boxes = []
+
+            for index, text in enumerate(rec_texts):
+
+                text = str(text).strip()
+
+                if not text:
+                    continue
+
+                confidence = 0.0
+
+                if index < len(rec_scores):
+                    try:
+                        confidence = float(rec_scores[index])
+                    except Exception:
+                        confidence = 0.0
+
+                bbox = None
+
+                if index < len(rec_boxes):
+                    try:
+                        bbox = rec_boxes[index].tolist()
+                    except Exception:
+                        try:
+                            bbox = list(rec_boxes[index])
+                        except Exception:
+                            bbox = None
+
+                texts.append({
+                    "text": text,
+                    "confidence": confidence,
+                    "bbox": bbox
+                })
 
         return texts
