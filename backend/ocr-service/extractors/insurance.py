@@ -1,80 +1,93 @@
 import re
 
-
-DATE_PATTERN = re.compile(
-    r"\b\d{2}[-/]\d{2}[-/]\d{4}\b"
+from ocr.normalizer import (
+    normalize_lines,
+    value_after_label
 )
-
-
-def get_value(texts, index):
-
-    text = texts[index]["text"].strip()
-
-    if ":" in text:
-
-        value = text.split(":", 1)[1].strip()
-
-        if value:
-            return value
-
-    if index + 1 < len(texts):
-        return texts[index + 1]["text"].strip()
-
-    return None
 
 
 def extract(texts):
 
-    policy_number = None
-    insurer_name = None
-    vehicle_registration_number = None
-    insured_name = None
-    valid_from = None
-    valid_to = None
+    lines = normalize_lines(texts)
 
-    for index, item in enumerate(texts):
+    vehicle_registration_number = value_after_label(
+        lines,
+        [
+            "Registration Number",
+            "Registration No",
+            "Vehicle Registration Number",
+            "Vehicle Regn No"
+        ]
+    )
 
-        text = item["text"].strip()
-        upper_text = text.upper()
+    owner_name = value_after_label(
+        lines,
+        [
+            "Owner Name",
+            "Registered Owner",
+            "Insured Name"
+        ]
+    )
 
-        if "POLICY NUMBER" in upper_text:
+    insurance_company = value_after_label(
+        lines,
+        [
+            "Insurance Company",
+            "Insurer Name",
+            "Insurer"
+        ]
+    )
 
-            policy_number = get_value(texts, index)
+    policy_number = value_after_label(
+        lines,
+        [
+            "Policy Number",
+            "Policy No",
+            "Policy No."
+        ]
+    )
 
-        elif "FROM:" in upper_text:
+    valid_until = value_after_label(
+        lines,
+        [
+            "Valid Upto",
+            "Valid Up To",
+            "Valid Until",
+            "Validity",
+            "Policy Validity"
+        ]
+    )
 
-            match = DATE_PATTERN.search(text)
+    valid_from = value_after_label(
+        lines,
+        [
+            "Valid From",
+            "Policy Start Date",
+            "Start Date"
+        ]
+    )
 
-            if match:
-                valid_from = match.group()
+    # Sometimes registration number is badly positioned
+    # and appears in a line without being captured by the label logic.
+    if not vehicle_registration_number:
 
-        elif "TO:" in upper_text:
+        for line in lines:
 
-            match = DATE_PATTERN.search(text)
-
-            if match:
-                valid_to = match.group()
-
-        elif "INSURED'S NAME" in upper_text:
-
-            insured_name = get_value(texts, index)
-
-        elif "VEHICLE REGISTRATION NO" in upper_text:
-
-            vehicle_registration_number = get_value(
-                texts,
-                index
+            match = re.search(
+                r"\b([A-Z]{2}\d{1,2}[A-Z]{1,3}\d{4})\b",
+                line.upper()
             )
 
-        elif "INSURANCE COMPANY" in upper_text:
-
-            insurer_name = get_value(texts, index)
+            if match:
+                vehicle_registration_number = match.group(1)
+                break
 
     return {
         "policyNumber": policy_number,
-        "insurerName": insurer_name,
-        "vehicleRegistrationNumber": vehicle_registration_number,
-        "insuredName": insured_name,
+        "insuranceCompany": insurance_company,
+        "vehicleRegistrationNumber":
+            vehicle_registration_number,
+        "insuredName": owner_name,
         "validFrom": valid_from,
-        "validTo": valid_to
+        "validTo": valid_until
     }
