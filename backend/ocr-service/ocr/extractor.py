@@ -1,369 +1,1043 @@
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 
-def _normalize_texts(texts: List[Any]) -> List[Dict[str, Any]]:
-    """
-    Normalize OCR output into:
-    [
-        {
-            "text": "...",
-            "confidence": 0.99,
-            "bbox": [...]
-        }
+# ============================================================
+# BASIC HELPERS
+# ============================================================
+
+def clean_text(value: str) -> str:
+    if not value:
+        return ""
+
+    value = value.replace("\\:", ":")
+    value = value.replace("\\", "")
+    value = re.sub(r"\s+", " ", value)
+
+    return value.strip(" :,-")
+
+
+def normalize_label(value: str) -> str:
+    value = clean_text(value).lower()
+
+    replacements = {
+        "manufacturar": "manufacturer",
+        "manufactuer": "manufacturer",
+        "licence": "license",
+        "regn": "registration",
+        "regd": "registered",
+        "chasis": "chassis",
+        "upto": "up to",
+    }
+
+    for old, new in replacements.items():
+        value = value.replace(old, new)
+
+    value = re.sub(r"[^a-z0-9 ]", " ", value)
+    value = re.sub(r"\s+", " ", value)
+
+    return value.strip()
+
+
+def bbox(item: Dict[str, Any]) -> List[float]:
+    value = item.get("bbox") or [0, 0, 0, 0]
+
+    if len(value) < 4:
+        return [0, 0, 0, 0]
+
+    return [
+        float(value[0]),
+        float(value[1]),
+        float(value[2]),
+        float(value[3]),
     ]
 
-    Supports both dictionary-based OCR results and plain strings.
+
+def x1(item):
+    return bbox(item)[0]
+
+
+def y1(item):
+    return bbox(item)[1]
+
+
+def x2(item):
+    return bbox(item)[2]
+
+
+def y2(item):
+    return bbox(item)[3]
+
+
+def center_y(item):
+    return (y1(item) + y2(item)) / 2
+
+
+def height(item):
+    return max(1, y2(item) - y1(item))
+
+
+def same_row(a, b) -> bool:
+    """
+    Two OCR boxes belong to the same visual row when
+    their vertical centers are close relative to text height.
     """
 
-    normalized = []
+    tolerance = max(
+        height(a),
+        height(b),
+        12
+    ) * 0.8
+
+    return abs(center_y(a) - center_y(b)) <= tolerance
+
+
+# ============================================================
+# OCR TOKEN PREPARATION
+# ============================================================
+
+def prepare_tokens(texts: List[Any]) -> List[Dict[str, Any]]:
+
+    tokens = []
 
     for item in texts:
-        if isinstance(item, dict):
-            text = str(item.get("text", "")).strip()
 
-            if not text:
-                continue
+        if not isinstance(item, dict):
+            continue
 
-            normalized.append({
-                "text": text,
-                "confidence": float(item.get("confidence", 0.0)),
-                "bbox": item.get("bbox")
-            })
+        text = clean_text(str(item.get("text", "")))
 
-        elif isinstance(item, str):
-            text = item.strip()
+        if not text:
+            continue
 
-            if text:
-                normalized.append({
-                    "text": text,
-                    "confidence": 0.0,
-                    "bbox": None
-                })
+        tokens.append({
+            "text": text,
+            "confidence": float(item.get("confidence", 0)),
+            "bbox": item.get("bbox") or [0, 0, 0, 0]
+        })
 
-    return normalized
+    return tokens
 
 
-def _clean_text(text: str) -> str:
-    """Normalize spaces and remove unnecessary whitespace."""
+# ============================================================
+# FIELD ALIASES
+# ============================================================
 
-    return re.sub(r"\s+", " ", text).strip()
+FIELD_ALIASES = {
+
+    "RC": {
+
+        "registrationNumber": [
+            "regn no",
+            "registration no",
+            "registration number",
+            "vehicle registration number"
+        ],
+
+        "ownerName": [
+            "regd owner",
+            "registered owner",
+            "owner name",
+            "name of registered owner"
+        ],
+
+        "registrationDate": [
+            "regn date",
+            "registration date"
+        ],
+
+        "colour": [
+            "colour",
+            "color"
+        ],
+
+        "fuelType": [
+            "fuel",
+            "fuel type"
+        ],
+
+        "vehicleClass": [
+            "vehicle class",
+            "class of vehicle"
+        ],
+
+        "bodyType": [
+            "body type"
+        ],
+
+        "manufacturer": [
+            "manufacturar",
+            "manufacturer",
+            "manufacturer name",
+            "maker"
+        ],
+
+        "chassisNumber": [
+            "chassis no",
+            "chassis number"
+        ],
+
+        "engineNumber": [
+            "engine no",
+            "engine number"
+        ],
+
+        "model": [
+            "model no",
+            "model number",
+            "model"
+        ],
+
+        "registrationValidity": [
+            "regd validity",
+            "registration validity"
+        ],
+
+        "address": [
+            "address"
+        ],
+
+        "seatingCapacity": [
+            "seat capacity",
+            "seating capacity"
+        ]
+    },
+
+    "DRIVING_LICENSE": {
+
+        "dlNumber": [
+            "licence no",
+            "license no",
+            "licence number",
+            "license number",
+            "dl no",
+            "dl number"
+        ],
+
+        "name": [
+            "name"
+        ],
+
+        "dateOfBirth": [
+            "dob",
+            "date of birth"
+        ],
+
+        "address": [
+            "address"
+        ],
+
+        "validFrom": [
+            "date of issue",
+            "issue date"
+        ],
+
+        "validTo": [
+            "validity",
+            "valid upto",
+            "valid up to",
+            "valid till"
+        ]
+    },
+
+    "GST": {
+
+        "gstNumber": [
+            "registration number",
+            "gstin",
+            "gst number"
+        ],
+
+        "legalName": [
+            "legal name"
+        ],
+
+        "tradeName": [
+            "trade name",
+            "trade name if any"
+        ],
+
+        "businessAddress": [
+            "address of principal place of business",
+            "address of principal place of",
+            "principal place of business",
+            "business address"
+        ],
+
+        "constitutionOfBusiness": [
+            "constitution of business"
+        ],
+
+        "registrationType": [
+            "type of registration"
+        ],
+
+        "dateOfIssue": [
+            "date of issue of certificate",
+            "date of issue"
+        ]
+    },
+
+    "FSSAI": {
+
+        "licenseNumber": [
+            "license number",
+            "licence number",
+            "license no",
+            "licence no"
+        ],
+
+        "businessName": [
+            "name of licensee",
+            "name & registered office address of",
+            "name and registered office address of"
+        ],
+
+        "businessAddress": [
+            "registered office address"
+        ],
+
+        "premisesAddress": [
+            "address of authorized premises",
+            "address of authorised premises"
+        ],
+
+        "kindOfBusiness": [
+            "kind of business"
+        ],
+
+        "licenseCategory": [
+            "category of license",
+            "license category"
+        ],
+
+        "issuedDate": [
+            "issued on",
+            "date of issue"
+        ],
+
+        "validUntil": [
+            "valid upto",
+            "valid up to",
+            "valid until"
+        ]
+    },
+
+    "INSURANCE": {
+
+        "registrationNumber": [
+            "registration number",
+            "vehicle registration number"
+        ],
+
+        "ownerName": [
+            "owner name",
+            "insured name"
+        ],
+
+        "insuranceCompany": [
+            "insurance company",
+            "insurer"
+        ],
+
+        "policyNumber": [
+            "policy number",
+            "policy no"
+        ],
+
+        "insuranceValidUntil": [
+            "valid upto",
+            "valid up to",
+            "valid until"
+        ],
+
+        "vehicleModel": [
+            "vehicle model",
+            "model"
+        ],
+
+        "fuelType": [
+            "fuel type",
+            "fuel"
+        ],
+
+        "chassisNumber": [
+            "chassis number",
+            "chassis no",
+            "chasis number"
+        ],
+
+        "engineNumber": [
+            "engine number",
+            "engine no"
+        ]
+    },
+
+    "PAN": {
+
+        "panNumber": [
+            "pan number",
+            "permanent account number",
+            "pan"
+        ],
+
+        "name": [
+            "name"
+        ],
+
+        "fatherName": [
+            "father name",
+            "fathers name",
+            "father's name"
+        ],
+
+        "dateOfBirth": [
+            "date of birth",
+            "dob"
+        ]
+    },
+
+    "BUSINESS_REGISTRATION": {
+
+        "registrationNumber": [
+            "registration number",
+            "registration no",
+            "certificate number"
+        ],
+
+        "businessName": [
+            "business name",
+            "company name",
+            "name of company",
+            "name of organization",
+            "name of organisation"
+        ],
+
+        "organisationType": [
+            "organisation type",
+            "organization type",
+            "entity type",
+            "constitution of business"
+        ],
+
+        "address": [
+            "registered address",
+            "business address",
+            "registered office address"
+        ],
+
+        "registrationDate": [
+            "registration date",
+            "date of registration",
+            "date of incorporation"
+        ],
+
+        "validUntil": [
+            "valid until",
+            "valid upto",
+            "valid up to",
+            "expiry date"
+        ]
+    }
+}
 
 
-def _find_value_after_label(
-        texts: List[Dict[str, Any]],
-        aliases: List[str]
-) -> str | None:
-    """
-    Find the OCR line containing one of the supplied labels
-    and return the value appearing after the label.
+# ============================================================
+# LABEL DETECTION
+# ============================================================
 
-    Example:
-        Licence No. : DL-0420110149646
-        -> DL-0420110149646
-    """
+def find_field(text: str, document_type: str) -> Optional[Tuple[str, str]]:
 
-    normalized_aliases = [
-        alias.upper().strip()
-        for alias in aliases
-    ]
+    normalized = normalize_label(text)
 
-    for i, item in enumerate(texts):
-        text = _clean_text(item["text"])
-        upper_text = text.upper()
+    aliases = FIELD_ALIASES.get(document_type, {})
 
-        for alias in normalized_aliases:
+    matches = []
 
-            # Case 1:
-            # "Licence No. : DL-12345"
-            if alias in upper_text:
+    for field, values in aliases.items():
 
-                value = re.sub(
-                    re.escape(alias),
-                    "",
-                    text,
-                    flags=re.IGNORECASE
-                )
+        for alias in values:
 
-                value = value.strip(" :-/")
+            normalized_alias = normalize_label(alias)
 
-                if value:
-                    return value
-
-                # Case 2:
-                # Label is on one line and value is on next line
-                if i + 1 < len(texts):
-                    next_value = _clean_text(
-                        texts[i + 1]["text"]
+            if normalized_alias in normalized:
+                matches.append(
+                    (
+                        len(normalized_alias),
+                        field,
+                        normalized_alias
                     )
-
-                    if next_value:
-                        return next_value
-
-    return None
-
-
-def _find_pattern(
-        texts: List[Dict[str, Any]],
-        pattern: str,
-        flags: int = re.IGNORECASE
-) -> str | None:
-    """Search all OCR text for a regular-expression pattern."""
-
-    compiled = re.compile(pattern, flags)
-
-    for item in texts:
-        match = compiled.search(item["text"])
-
-        if match:
-            return match.group().strip()
-
-    return None
-
-
-def _extract_date(
-        texts: List[Dict[str, Any]],
-        aliases: List[str]
-) -> str | None:
-    """
-    Extract a date associated with a label.
-
-    Supports:
-        DD/MM/YYYY
-        DD-MM-YYYY
-        DD.MM.YYYY
-    """
-
-    normalized_aliases = [
-        alias.upper().strip()
-        for alias in aliases
-    ]
-
-    date_pattern = re.compile(
-        r"\b\d{2}[\/\-.]\d{2}[\/\-.]\d{4}\b"
-    )
-
-    for i, item in enumerate(texts):
-        text = _clean_text(item["text"])
-        upper_text = text.upper()
-
-        if any(alias in upper_text for alias in normalized_aliases):
-
-            match = date_pattern.search(text)
-
-            if match:
-                return match.group()
-
-            if i + 1 < len(texts):
-                next_text = _clean_text(
-                    texts[i + 1]["text"]
                 )
 
-                match = date_pattern.search(next_text)
+    if not matches:
+        return None
 
-                if match:
-                    return match.group()
+    # Longest matching alias wins.
+    matches.sort(reverse=True)
 
-    return None
+    _, field, alias = matches[0]
+
+    return field, alias
 
 
-def _extract_dl(texts: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Extract canonical fields from a Driving Licence.
+# ============================================================
+# INLINE VALUE
+# ============================================================
 
-    The extractor accepts different common labels and maps
-    them to a stable response structure.
-    """
+def extract_inline_value(
+        text: str,
+        alias: str
+) -> Optional[str]:
 
-    dl_number = _find_pattern(
-        texts,
-        r"\b[A-Z]{2}[-\s]?\d{2}[-\s]?\d{4,}\b"
+    original = clean_text(text)
+
+    normalized_original = normalize_label(original)
+
+    alias_normalized = normalize_label(alias)
+
+    position = normalized_original.find(alias_normalized)
+
+    if position == -1:
+        return None
+
+    # Work from original text rather than normalized text
+    # to preserve values such as registration numbers.
+    pattern = re.compile(
+        re.escape(alias).replace("\\ ", r"\s+"),
+        re.IGNORECASE
     )
 
-    if not dl_number:
-        dl_number = _find_value_after_label(
-            texts,
-            [
-                "LICENCE NO.",
-                "LICENSE NO.",
-                "LICENCE NO",
-                "LICENSE NO",
-                "DL NO.",
-                "DL NO",
-                "DRIVING LICENCE NO.",
-                "DRIVING LICENSE NO.",
-                "DRIVING LICENCE NUMBER",
-                "DRIVING LICENSE NUMBER"
-            ]
+    match = pattern.search(original)
+
+    if not match:
+        return None
+
+    value = original[match.end():]
+
+    value = re.sub(
+        r"^[\s:.\-\\/]+",
+        "",
+        value
+    )
+
+    return clean_text(value)
+
+
+# ============================================================
+# RIGHT-SIDE MATCH
+# ============================================================
+
+def find_same_row_value(
+        tokens: List[Dict[str, Any]],
+        label_index: int,
+        alias: str
+) -> Optional[str]:
+
+    label = tokens[label_index]
+
+    # First: value may be inside the same OCR token.
+    inline = extract_inline_value(
+        label["text"],
+        alias
+    )
+
+    if inline:
+        return inline
+
+    candidates = []
+
+    for index, token in enumerate(tokens):
+
+        if index == label_index:
+            continue
+
+        # Must actually be on the same visual row.
+        if not same_row(label, token):
+            continue
+
+        # Value must be to the RIGHT.
+        if x1(token) < x2(label) - 5:
+            continue
+
+        distance = x1(token) - x2(label)
+
+        # Don't jump across the page.
+        if distance > 700:
+            continue
+
+        candidates.append(
+            (
+                distance,
+                index,
+                token
+            )
         )
 
-    name = _find_value_after_label(
-        texts,
-        [
-            "NAME",
-            "NAME OF HOLDER",
-            "NAME OF THE HOLDER"
-        ]
+    if not candidates:
+        return None
+
+    candidates.sort(
+        key=lambda x: x[0]
     )
 
-    date_of_birth = _extract_date(
-        texts,
-        [
-            "DOB",
-            "DATE OF BIRTH",
-            "DATE OF BIRTH:"
-        ]
+    return clean_text(
+        candidates[0][2]["text"]
     )
 
-    address = _find_value_after_label(
-        texts,
-        [
-            "ADDRESS",
-            "PERMANENT ADDRESS",
-            "PRESENT ADDRESS"
-        ]
+
+# ============================================================
+# BELOW-LABEL MATCH
+# ============================================================
+
+def find_below_value(
+        tokens: List[Dict[str, Any]],
+        label_index: int
+) -> Optional[str]:
+
+    label = tokens[label_index]
+
+    candidates = []
+
+    for index, token in enumerate(tokens):
+
+        if index == label_index:
+            continue
+
+        # Must be below.
+        if y1(token) < y2(label) - 3:
+            continue
+
+        vertical_gap = y1(token) - y2(label)
+
+        # Don't jump too far.
+        if vertical_gap > 80:
+            continue
+
+        # Similar horizontal area.
+        horizontal_distance = abs(
+            x1(token) - x1(label)
+        )
+
+        if horizontal_distance > 250:
+            continue
+
+        candidates.append(
+            (
+                vertical_gap + horizontal_distance,
+                index,
+                token
+            )
+        )
+
+    if not candidates:
+        return None
+
+    candidates.sort(
+        key=lambda x: x[0]
     )
 
-    valid_from = _extract_date(
-        texts,
-        [
-            "ISSUE DATE",
-            "DATE OF ISSUE",
-            "VALID FROM",
-            "VALID FROM:"
-        ]
+    return clean_text(
+        candidates[0][2]["text"]
     )
 
-    valid_to = _extract_date(
-        texts,
-        [
-            "VALID TO",
-            "VALID UPTO",
-            "VALID UP TO",
-            "EXPIRY DATE",
-            "VALIDITY"
-        ]
+
+# ============================================================
+# ADDRESS COLLECTION
+# ============================================================
+
+def collect_address(
+        tokens: List[Dict[str, Any]],
+        label_index: int,
+        first_value: str,
+        document_type: str
+) -> str:
+
+    label = tokens[label_index]
+
+    # Find the token that supplied the first value.
+    value_index = None
+
+    for index, token in enumerate(tokens):
+
+        if clean_text(token["text"]) == clean_text(first_value):
+            value_index = index
+            break
+
+    if value_index is None:
+        return first_value
+
+    result = [first_value]
+
+    previous = tokens[value_index]
+
+    for index in range(value_index + 1, len(tokens)):
+
+        token = tokens[index]
+
+        # Must be below.
+        if y1(token) < y2(previous):
+            continue
+
+        vertical_gap = y1(token) - y2(previous)
+
+        if vertical_gap > 45:
+            break
+
+        text = clean_text(token["text"])
+
+        # Numbered section = next field.
+        if re.match(r"^\d+\.", text):
+            break
+
+        # Another known label = next field.
+        field_match = find_field(
+            text,
+            document_type
+        )
+
+        if field_match:
+            break
+
+        # Keep address lines reasonably aligned.
+        if abs(x1(token) - x1(previous)) > 180:
+            break
+
+        result.append(text)
+        previous = token
+
+    return " ".join(result)
+
+
+# ============================================================
+# VALUE VALIDATORS
+# ============================================================
+
+def validate_value(
+        document_type: str,
+        field: str,
+        value: str
+) -> Optional[str]:
+
+    value = clean_text(value)
+
+    if not value:
+        return None
+
+    upper = value.upper()
+
+    # --------------------------------------------------------
+    # GST
+    # --------------------------------------------------------
+
+    if document_type == "GST" and field == "gstNumber":
+
+        match = re.search(
+            r"\b\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]Z[A-Z0-9]\b",
+            upper
+        )
+
+        return match.group(0) if match else None
+
+    # --------------------------------------------------------
+    # PAN
+    # --------------------------------------------------------
+
+    if document_type == "PAN" and field == "panNumber":
+
+        match = re.search(
+            r"\b[A-Z]{5}\d{4}[A-Z]\b",
+            upper
+        )
+
+        return match.group(0) if match else None
+
+    # --------------------------------------------------------
+    # DL
+    # --------------------------------------------------------
+
+    if document_type == "DRIVING_LICENSE" and field == "dlNumber":
+
+        match = re.search(
+            r"\b[A-Z]{2}[-\s]?\d{2}[-\s]?\d{4}[-\s]?\d{7}\b",
+            upper
+        )
+
+        if not match:
+            return None
+
+        raw = re.sub(
+            r"[-\s]",
+            "",
+            match.group(0)
+        )
+
+        return raw[:2] + "-" + raw[2:]
+
+    # --------------------------------------------------------
+    # Dates
+    # --------------------------------------------------------
+
+    if field in {
+        "registrationDate",
+        "registrationValidity",
+        "dateOfBirth",
+        "validFrom",
+        "validTo",
+        "issuedDate",
+        "validUntil",
+        "insuranceValidUntil",
+        "dateOfIssue",
+        "registrationDate"
+    }:
+
+        match = re.search(
+            r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+            value
+        )
+
+        if match:
+            return match.group(0)
+
+    return value
+
+
+# ============================================================
+# SPECIAL REGEX FALLBACKS
+# ============================================================
+
+def regex_fallback(
+        document_type: str,
+        tokens: List[Dict[str, Any]],
+        result: Dict[str, Any]
+):
+
+    full_text = " ".join(
+        clean_text(token["text"])
+        for token in tokens
     )
 
-    return {
-        "dlNumber": dl_number,
-        "name": name,
-        "dateOfBirth": date_of_birth,
-        "address": address,
-        "validFrom": valid_from,
-        "validTo": valid_to,
-        "vehicleClasses": []
-    }
+    upper = full_text.upper()
+
+    # --------------------------------------------------------
+    # GST
+    # --------------------------------------------------------
+
+    if document_type == "GST":
+
+        if "gstNumber" not in result:
+
+            match = re.search(
+                r"\b\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]Z[A-Z0-9]\b",
+                upper
+            )
+
+            if match:
+                result["gstNumber"] = match.group(0)
+
+    # --------------------------------------------------------
+    # PAN
+    # --------------------------------------------------------
+
+    if document_type == "PAN":
+
+        if "panNumber" not in result:
+
+            match = re.search(
+                r"\b[A-Z]{5}\d{4}[A-Z]\b",
+                upper
+            )
+
+            if match:
+                result["panNumber"] = match.group(0)
+
+    # --------------------------------------------------------
+    # RC
+    # --------------------------------------------------------
+
+    if document_type == "RC":
+
+        if "registrationNumber" not in result:
+
+            # IMPORTANT:
+            # Prefer the text containing "Regn. No."
+            for token in tokens:
+
+                text = upper_text(token)
+
+                if "REGN" in text and "NO" in text:
+
+                    match = re.search(
+                        r"\b[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{4}\b",
+                        text
+                    )
+
+                    if match:
+                        result["registrationNumber"] = match.group(0)
+                        break
+
+    # --------------------------------------------------------
+    # DL
+    # --------------------------------------------------------
+
+    if document_type == "DRIVING_LICENSE":
+
+        if "dlNumber" not in result:
+
+            for token in tokens:
+
+                text = upper_text(token)
+
+                if "DL-" in text:
+
+                    match = re.search(
+                        r"\b[A-Z]{2}[-\s]?\d{2}[-\s]?\d{4}[-\s]?\d{7}\b",
+                        text
+                    )
+
+                    if match:
+
+                        raw = re.sub(
+                            r"[-\s]",
+                            "",
+                            match.group(0)
+                        )
+
+                        result["dlNumber"] = (
+                                raw[:2] + "-" + raw[2:]
+                        )
+
+                        break
 
 
-def _extract_pan(texts: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Extract canonical fields from a PAN document."""
+def upper_text(token):
+    return clean_text(
+        token["text"]
+    ).upper()
 
-    pan_number = _find_pattern(
-        texts,
-        r"\b[A-Z]{5}[0-9]{4}[A-Z]\b",
-        flags=re.IGNORECASE
+
+# ============================================================
+# MAIN EXTRACTION
+# ============================================================
+
+def extract_generic(
+        document_type: str,
+        texts: List[Any]
+) -> Dict[str, Any]:
+
+    document_type = document_type.upper()
+
+    if document_type not in FIELD_ALIASES:
+
+        raise ValueError(
+            f"Unsupported document type: {document_type}"
+        )
+
+    tokens = prepare_tokens(texts)
+
+    result = {}
+
+    # --------------------------------------------------------
+    # Detect labels
+    # --------------------------------------------------------
+
+    for index, token in enumerate(tokens):
+
+        match = find_field(
+            token["text"],
+            document_type
+        )
+
+        if not match:
+            continue
+
+        field, alias = match
+
+        # Don't let a later occurrence overwrite
+        # an already extracted field.
+        if field in result:
+            continue
+
+        value = None
+
+        # ----------------------------------------------------
+        # 1. Same-line value
+        # ----------------------------------------------------
+
+        value = find_same_row_value(
+            tokens,
+            index,
+            alias
+        )
+
+        # ----------------------------------------------------
+        # 2. Next-line value
+        # ----------------------------------------------------
+
+        if not value:
+
+            value = find_below_value(
+                tokens,
+                index
+            )
+
+        if not value:
+            continue
+
+        # ----------------------------------------------------
+        # 3. Normalize / validate
+        # ----------------------------------------------------
+
+        value = validate_value(
+            document_type,
+            field,
+            value
+        )
+
+        if not value:
+            continue
+
+        # ----------------------------------------------------
+        # 4. Address continuation
+        # ----------------------------------------------------
+
+        if field in {
+            "address",
+            "businessAddress",
+            "premisesAddress"
+        }:
+
+            value = collect_address(
+                tokens,
+                index,
+                value,
+                document_type
+            )
+
+        result[field] = value
+
+    # --------------------------------------------------------
+    # Regex fallback
+    # --------------------------------------------------------
+
+    regex_fallback(
+        document_type,
+        tokens,
+        result
     )
 
-    name = _find_value_after_label(
-        texts,
-        [
-            "NAME",
-            "/NAME"
-        ]
-    )
-
-    father_name = _find_value_after_label(
-        texts,
-        [
-            "FATHER'S NAME",
-            "/FATHER'S NAME",
-            "FATHER NAME"
-        ]
-    )
-
-    date_of_birth = _extract_date(
-        texts,
-        [
-            "DATE OF BIRTH",
-            "DOB"
-        ]
-    )
-
-    return {
-        "panNumber": pan_number,
-        "name": name,
-        "fatherName": father_name,
-        "dateOfBirth": date_of_birth
-    }
+    return result
 
 
-def _extract_gst(texts: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Extract canonical fields from a GST document."""
-
-    gst_number = _find_pattern(
-        texts,
-        r"\b\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]\b"
-    )
-
-    legal_name = _find_value_after_label(
-        texts,
-        [
-            "LEGAL NAME",
-            "LEGAL NAME OF BUSINESS"
-        ]
-    )
-
-    trade_name = _find_value_after_label(
-        texts,
-        [
-            "TRADE NAME",
-            "TRADE NAME OF BUSINESS"
-        ]
-    )
-
-    business_address = _find_value_after_label(
-        texts,
-        [
-            "ADDRESS",
-            "PRINCIPAL PLACE OF BUSINESS"
-        ]
-    )
-
-    return {
-        "gstNumber": gst_number,
-        "legalName": legal_name,
-        "tradeName": trade_name,
-        "businessAddress": business_address
-    }
-
+# ============================================================
+# PUBLIC FUNCTION
+# ============================================================
 
 def extract_fields(
         document_type: str,
         texts: List[Any]
 ) -> Dict[str, Any]:
-    """
-    Main document extraction entry point.
 
-    PaddleOCR produces OCR data.
-    This function converts that OCR data into
-    document-specific structured fields.
-    """
-
-    normalized_texts = _normalize_texts(texts)
-
-    document_type = document_type.upper().strip()
-
-    if document_type == "DRIVING_LICENSE":
-        return _extract_dl(normalized_texts)
-
-    if document_type == "PAN":
-        return _extract_pan(normalized_texts)
-
-    if document_type == "GST":
-        return _extract_gst(normalized_texts)
-
-    # Unknown document type.
-    # Return raw OCR-derived information without
-    # inventing document-specific fields.
-    return {}
+    return extract_generic(
+        document_type.upper(),
+        texts
+    )
