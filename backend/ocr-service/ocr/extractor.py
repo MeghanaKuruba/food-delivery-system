@@ -105,14 +105,18 @@ def prepare_tokens(texts: List[Any]) -> List[Dict[str, Any]]:
         if not isinstance(item, dict):
             continue
 
-        text = clean_text(str(item.get("text", "")))
+        text = clean_text(
+            str(item.get("text", ""))
+        )
 
         if not text:
             continue
 
         tokens.append({
             "text": text,
-            "confidence": float(item.get("confidence", 0)),
+            "confidence": float(
+                item.get("confidence", 0)
+            ),
             "bbox": item.get("bbox") or [0, 0, 0, 0]
         })
 
@@ -446,11 +450,17 @@ FIELD_ALIASES = {
 # LABEL DETECTION
 # ============================================================
 
-def find_field(text: str, document_type: str) -> Optional[Tuple[str, str]]:
+def find_field(
+        text: str,
+        document_type: str
+) -> Optional[Tuple[str, str]]:
 
     normalized = normalize_label(text)
 
-    aliases = FIELD_ALIASES.get(document_type, {})
+    aliases = FIELD_ALIASES.get(
+        document_type,
+        {}
+    )
 
     matches = []
 
@@ -458,14 +468,17 @@ def find_field(text: str, document_type: str) -> Optional[Tuple[str, str]]:
 
         for alias in values:
 
-            normalized_alias = normalize_label(alias)
+            normalized_alias = normalize_label(
+                alias
+            )
 
             if normalized_alias in normalized:
+
                 matches.append(
                     (
                         len(normalized_alias),
                         field,
-                        normalized_alias
+                        alias
                     )
                 )
 
@@ -473,11 +486,17 @@ def find_field(text: str, document_type: str) -> Optional[Tuple[str, str]]:
         return None
 
     # Longest matching alias wins.
-    matches.sort(reverse=True)
+    matches.sort(
+        key=lambda x: x[0],
+        reverse=True
+    )
 
-    _, field, alias = matches[0]
+    _, field, original_alias = matches[0]
 
-    return field, alias
+    # Return the ORIGINAL alias.
+    # This is important because extract_inline_value()
+    # searches the original OCR text.
+    return field, original_alias
 
 
 # ============================================================
@@ -491,19 +510,14 @@ def extract_inline_value(
 
     original = clean_text(text)
 
-    normalized_original = normalize_label(original)
-
-    alias_normalized = normalize_label(alias)
-
-    position = normalized_original.find(alias_normalized)
-
-    if position == -1:
+    if not original or not alias:
         return None
 
-    # Work from original text rather than normalized text
-    # to preserve values such as registration numbers.
     pattern = re.compile(
-        re.escape(alias).replace("\\ ", r"\s+"),
+        re.escape(alias).replace(
+            "\\ ",
+            r"\s+"
+        ),
         re.IGNORECASE
     )
 
@@ -512,7 +526,9 @@ def extract_inline_value(
     if not match:
         return None
 
-    value = original[match.end():]
+    value = original[
+            match.end():
+            ]
 
     value = re.sub(
         r"^[\s:.\-\\/]+",
@@ -520,7 +536,9 @@ def extract_inline_value(
         value
     )
 
-    return clean_text(value)
+    value = clean_text(value)
+
+    return value if value else None
 
 
 # ============================================================
@@ -552,14 +570,19 @@ def find_same_row_value(
             continue
 
         # Must actually be on the same visual row.
-        if not same_row(label, token):
+        if not same_row(
+                label,
+                token
+        ):
             continue
 
         # Value must be to the RIGHT.
         if x1(token) < x2(label) - 5:
             continue
 
-        distance = x1(token) - x2(label)
+        distance = (
+                x1(token) - x2(label)
+        )
 
         # Don't jump across the page.
         if distance > 700:
@@ -607,7 +630,9 @@ def find_below_value(
         if y1(token) < y2(label) - 3:
             continue
 
-        vertical_gap = y1(token) - y2(label)
+        vertical_gap = (
+                y1(token) - y2(label)
+        )
 
         # Don't jump too far.
         if vertical_gap > 80:
@@ -652,25 +677,32 @@ def collect_address(
         document_type: str
 ) -> str:
 
-    label = tokens[label_index]
-
-    # Find the token that supplied the first value.
     value_index = None
 
     for index, token in enumerate(tokens):
 
-        if clean_text(token["text"]) == clean_text(first_value):
+        if clean_text(
+                token["text"]
+        ) == clean_text(
+            first_value
+        ):
+
             value_index = index
             break
 
     if value_index is None:
         return first_value
 
-    result = [first_value]
+    result = [
+        first_value
+    ]
 
     previous = tokens[value_index]
 
-    for index in range(value_index + 1, len(tokens)):
+    for index in range(
+            value_index + 1,
+            len(tokens)
+    ):
 
         token = tokens[index]
 
@@ -678,15 +710,22 @@ def collect_address(
         if y1(token) < y2(previous):
             continue
 
-        vertical_gap = y1(token) - y2(previous)
+        vertical_gap = (
+                y1(token) - y2(previous)
+        )
 
         if vertical_gap > 45:
             break
 
-        text = clean_text(token["text"])
+        text = clean_text(
+            token["text"]
+        )
 
         # Numbered section = next field.
-        if re.match(r"^\d+\.", text):
+        if re.match(
+                r"^\d+\.",
+                text
+        ):
             break
 
         # Another known label = next field.
@@ -699,10 +738,14 @@ def collect_address(
             break
 
         # Keep address lines reasonably aligned.
-        if abs(x1(token) - x1(previous)) > 180:
+        if abs(
+                x1(token) - x1(previous)
+        ) > 180:
+
             break
 
         result.append(text)
+
         previous = token
 
     return " ".join(result)
@@ -729,33 +772,50 @@ def validate_value(
     # GST
     # --------------------------------------------------------
 
-    if document_type == "GST" and field == "gstNumber":
+    if (
+            document_type == "GST"
+            and field == "gstNumber"
+    ):
 
         match = re.search(
             r"\b\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]Z[A-Z0-9]\b",
             upper
         )
 
-        return match.group(0) if match else None
+        return (
+            match.group(0)
+            if match
+            else None
+        )
 
     # --------------------------------------------------------
     # PAN
     # --------------------------------------------------------
 
-    if document_type == "PAN" and field == "panNumber":
+    if (
+            document_type == "PAN"
+            and field == "panNumber"
+    ):
 
         match = re.search(
             r"\b[A-Z]{5}\d{4}[A-Z]\b",
             upper
         )
 
-        return match.group(0) if match else None
+        return (
+            match.group(0)
+            if match
+            else None
+        )
 
     # --------------------------------------------------------
     # DL
     # --------------------------------------------------------
 
-    if document_type == "DRIVING_LICENSE" and field == "dlNumber":
+    if (
+            document_type == "DRIVING_LICENSE"
+            and field == "dlNumber"
+    ):
 
         match = re.search(
             r"\b[A-Z]{2}[-\s]?\d{2}[-\s]?\d{4}[-\s]?\d{7}\b",
@@ -771,7 +831,11 @@ def validate_value(
             match.group(0)
         )
 
-        return raw[:2] + "-" + raw[2:]
+        return (
+                raw[:2]
+                + "-"
+                + raw[2:]
+        )
 
     # --------------------------------------------------------
     # Dates
@@ -786,18 +850,35 @@ def validate_value(
         "issuedDate",
         "validUntil",
         "insuranceValidUntil",
-        "dateOfIssue",
-        "registrationDate"
+        "dateOfIssue"
     }:
 
-        match = re.search(
+        date_patterns = [
+
+            # 18-12-2022
             r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
-            value
-        )
 
-        if match:
-            return match.group(0)
+            # 06-Jul-2014
+            r"\b\d{1,2}-[A-Za-z]{3}-\d{2,4}\b",
 
+            # 06 July 2014
+            r"\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4}\b"
+        ]
+
+        for pattern in date_patterns:
+
+            match = re.search(
+                pattern,
+                value,
+                re.IGNORECASE
+            )
+
+            if match:
+                return match.group(0)
+
+    # IMPORTANT:
+    # Return normal values for all fields
+    # that do not need special validation.
     return value
 
 
@@ -812,7 +893,9 @@ def regex_fallback(
 ):
 
     full_text = " ".join(
-        clean_text(token["text"])
+        clean_text(
+            token["text"]
+        )
         for token in tokens
     )
 
@@ -832,7 +915,9 @@ def regex_fallback(
             )
 
             if match:
-                result["gstNumber"] = match.group(0)
+                result[
+                    "gstNumber"
+                ] = match.group(0)
 
     # --------------------------------------------------------
     # PAN
@@ -848,7 +933,9 @@ def regex_fallback(
             )
 
             if match:
-                result["panNumber"] = match.group(0)
+                result[
+                    "panNumber"
+                ] = match.group(0)
 
     # --------------------------------------------------------
     # RC
@@ -858,13 +945,17 @@ def regex_fallback(
 
         if "registrationNumber" not in result:
 
-            # IMPORTANT:
-            # Prefer the text containing "Regn. No."
+            # Prefer text containing Regn. No.
             for token in tokens:
 
-                text = upper_text(token)
+                text = upper_text(
+                    token
+                )
 
-                if "REGN" in text and "NO" in text:
+                if (
+                        "REGN" in text
+                        and "NO" in text
+                ):
 
                     match = re.search(
                         r"\b[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{4}\b",
@@ -872,7 +963,11 @@ def regex_fallback(
                     )
 
                     if match:
-                        result["registrationNumber"] = match.group(0)
+
+                        result[
+                            "registrationNumber"
+                        ] = match.group(0)
+
                         break
 
     # --------------------------------------------------------
@@ -885,7 +980,9 @@ def regex_fallback(
 
             for token in tokens:
 
-                text = upper_text(token)
+                text = upper_text(
+                    token
+                )
 
                 if "DL-" in text:
 
@@ -902,8 +999,12 @@ def regex_fallback(
                             match.group(0)
                         )
 
-                        result["dlNumber"] = (
-                                raw[:2] + "-" + raw[2:]
+                        result[
+                            "dlNumber"
+                        ] = (
+                                raw[:2]
+                                + "-"
+                                + raw[2:]
                         )
 
                         break
@@ -932,7 +1033,9 @@ def extract_generic(
             f"Unsupported document type: {document_type}"
         )
 
-    tokens = prepare_tokens(texts)
+    tokens = prepare_tokens(
+        texts
+    )
 
     result = {}
 
@@ -952,8 +1055,8 @@ def extract_generic(
 
         field, alias = match
 
-        # Don't let a later occurrence overwrite
-        # an already extracted field.
+        # Don't allow a later occurrence
+        # to overwrite an already extracted field.
         if field in result:
             continue
 
