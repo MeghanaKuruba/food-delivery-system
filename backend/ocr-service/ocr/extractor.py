@@ -231,6 +231,11 @@ FIELD_ALIASES = {
             "address"
         ],
 
+        "authorisationToDrive": [
+            "authorisation to drive",
+            "authorization to drive"
+        ],
+
         "validFrom": [
             "date of issue",
             "issue date"
@@ -699,6 +704,100 @@ def collect_address(
 
     previous = tokens[value_index]
 
+    # --------------------------------------------------------
+    # GST ONLY
+    #
+    # GST address OCR can be split like:
+    #
+    # Address of Principal Place of
+    # 1, CDRI, ... Lucknow, Uttar
+    # Business
+    # Pradesh, 226021
+    #
+    # "Business" is part of the label, not the next field.
+    # The continuation value can also slightly overlap the
+    # previous OCR box vertically.
+    #
+    # Keep this logic isolated to GST so no other document
+    # extraction behavior is changed.
+    # --------------------------------------------------------
+
+    if document_type == "GST":
+
+        previous_value = tokens[value_index]
+
+        for index in range(
+                value_index + 1,
+                len(tokens)
+        ):
+
+            token = tokens[index]
+
+            text = clean_text(
+                token["text"]
+            )
+
+            normalized_text = normalize_label(
+                text
+            )
+
+            # Skip the continuation word "Business"
+            # from "Address of Principal Place of Business".
+            if normalized_text == "business":
+                continue
+
+            # Numbered section = next field.
+            if re.match(
+                    r"^\d+\.",
+                    text
+            ):
+                break
+
+            # A complete known field label means the address
+            # has ended.
+            field_match = find_field(
+                text,
+                document_type
+            )
+
+            if field_match:
+                continue
+
+            # GST continuation values are normally aligned
+            # with the first address value.
+            horizontal_distance = abs(
+                x1(token) - x1(previous_value)
+            )
+
+            if horizontal_distance > 40:
+                continue
+
+            # Allow OCR boxes that overlap slightly vertically.
+            # This handles:
+            # first value y=347..360
+            # continuation value y=359..372
+            vertical_gap = (
+                    y1(token) - y2(previous_value)
+            )
+
+            if vertical_gap > 45:
+                break
+
+            # Ignore text that is clearly above the current
+            # address line.
+            if center_y(token) < center_y(previous_value) - 5:
+                continue
+
+            result.append(text)
+
+            previous_value = token
+
+        return " ".join(result)
+
+    # --------------------------------------------------------
+    # EXISTING ADDRESS LOGIC FOR ALL OTHER DOCUMENTS
+    # --------------------------------------------------------
+
     for index in range(
             value_index + 1,
             len(tokens)
@@ -1064,13 +1163,30 @@ def extract_generic(
 
         # ----------------------------------------------------
         # 1. Same-line value
+        #
+        # EXCEPTION:
+        # Driving License "Authorisation to Drive" has
+        # another field ("Date of Issue") on its right.
+        # Its actual value is directly below the label.
         # ----------------------------------------------------
 
-        value = find_same_row_value(
-            tokens,
-            index,
-            alias
-        )
+        if (
+                document_type == "DRIVING_LICENSE"
+                and field == "authorisationToDrive"
+        ):
+
+            value = find_below_value(
+                tokens,
+                index
+            )
+
+        else:
+
+            value = find_same_row_value(
+                tokens,
+                index,
+                alias
+            )
 
         # ----------------------------------------------------
         # 2. Next-line value
