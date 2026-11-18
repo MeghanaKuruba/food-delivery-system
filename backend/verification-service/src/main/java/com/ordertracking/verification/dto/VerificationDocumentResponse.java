@@ -5,6 +5,7 @@ import com.ordertracking.verification.enums.DocumentType;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -28,4 +29,6 @@ public class VerificationDocumentResponse {
     private LocalDateTime uploadedAt;
 
     private LocalDateTime verifiedAt;
+
+    private Map<String, Object> extractedData;
 }

@@ -9,6 +9,7 @@ import com.ordertracking.verification.enums.DocumentStatus;
 import com.ordertracking.verification.enums.DocumentType;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -32,6 +33,13 @@ public class VerificationMapper {
     public VerificationDocumentResponse toVerificationDocumentResponse(
             VerificationDocument document) {
 
+        return toVerificationDocumentResponse(document, null);
+    }
+
+    public VerificationDocumentResponse toVerificationDocumentResponse(
+            VerificationDocument document,
+            Map<String, Object> extractedData) {
+
         return VerificationDocumentResponse.builder()
                 .documentId(document.getDocumentId())
                 .referenceId(
@@ -44,6 +52,7 @@ public class VerificationMapper {
                 .rejectionReason(document.getRejectionReason())
                 .uploadedAt(document.getUploadedAt())
                 .verifiedAt(document.getVerifiedAt())
+                .extractedData(extractedData)
                 .build();
     }
 
