@@ -152,6 +152,9 @@ public class VerificationDocumentVerificationServiceImpl implements Verification
                 saved.getStatus()
         );
 
-        return mapper.toVerificationDocumentResponse(saved);
+        return mapper.toVerificationDocumentResponse(
+                saved,
+                result.extractedData()
+        );
     }
 }

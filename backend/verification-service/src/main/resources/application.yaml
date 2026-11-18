@@ -38,4 +38,6 @@ document:
 
 verification:
   ocr:
+    provider: python
+    url: ${OCR_SERVICE_URL:http://localhost:8089/api/v1/ocr/extract}
     language: eng

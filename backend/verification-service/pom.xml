@@ -33,6 +33,12 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 
+		<!-- Spring RestClient references this API at runtime. -->
+		<dependency>
+			<groupId>org.reactivestreams</groupId>
+			<artifactId>reactive-streams</artifactId>
+		</dependency>
+
 		<!-- JPA / Database -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

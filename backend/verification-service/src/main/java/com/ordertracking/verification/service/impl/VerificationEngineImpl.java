@@ -43,7 +43,8 @@ public class VerificationEngineImpl
 
             return new VerificationResult(
                     DocumentStatus.MANUAL_REVIEW,
-                    ocrResult.reason()
+                    ocrResult.reason(),
+                    ocrResult.extractedData()
             );
         }
 
@@ -61,7 +62,8 @@ public class VerificationEngineImpl
 
         return new VerificationResult(
                 DocumentStatus.MANUAL_REVIEW,
-                "Document text extracted successfully. Document verification rules are pending."
+                "Document text extracted successfully. Document verification rules are pending.",
+                ocrResult.extractedData()
         );
     }
 }

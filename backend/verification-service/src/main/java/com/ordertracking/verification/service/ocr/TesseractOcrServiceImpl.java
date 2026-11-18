@@ -10,6 +10,7 @@ import org.bytedeco.javacpp.BytePointer;
 import org.bytedeco.leptonica.PIX;
 import org.bytedeco.tesseract.TessBaseAPI;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -18,6 +19,7 @@ import java.io.InputStream;
 import static org.bytedeco.leptonica.global.leptonica.*;
 
 @Service
+@ConditionalOnProperty(name = "verification.ocr.provider", havingValue = "tesseract")
 @RequiredArgsConstructor
 @Slf4j
 public class TesseractOcrServiceImpl implements OcrService {
