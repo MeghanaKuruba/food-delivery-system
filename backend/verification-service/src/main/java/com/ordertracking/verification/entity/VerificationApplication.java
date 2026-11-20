@@ -26,6 +26,7 @@ import java.util.List;
 @Builder
 public class VerificationApplication {
 
+        /** Primary key of this verification application, not the Auth Service user ID. */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

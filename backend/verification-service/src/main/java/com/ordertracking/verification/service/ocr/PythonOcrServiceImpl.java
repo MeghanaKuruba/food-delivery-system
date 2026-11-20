@@ -168,7 +168,9 @@ public class PythonOcrServiceImpl implements OcrService {
         Map<String, Object> fields = new LinkedHashMap<>();
         for (String fieldName : new String[]{"panNumber", "name", "fatherName", "dateOfBirth"}) {
             JsonNode value = data.get(fieldName);
-            fields.put(fieldName, value == null || value.isNull() ? null : value.asText());
+            if (value != null && !value.isNull()) {
+                fields.put(fieldName, value.asText());
+            }
         }
         return fields;
     }

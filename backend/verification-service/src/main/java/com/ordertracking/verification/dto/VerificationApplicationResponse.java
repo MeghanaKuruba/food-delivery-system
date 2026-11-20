@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 @Builder
 public class VerificationApplicationResponse {
 
+    /** ID of this application; use authUserId to identify its owner. */
     private Long id;
 
     private Long authUserId;
